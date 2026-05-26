@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
 interface LayoutProps {
@@ -9,8 +10,11 @@ interface LayoutProps {
 
 export default function Layout({ children, title }: LayoutProps) {
   const router = useRouter()
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ''))
+  }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -28,7 +32,7 @@ export default function Layout({ children, title }: LayoutProps) {
             <Link href="/dashboard" className={`text-sm ${router.pathname === '/dashboard' ? 'text-amber-400 font-semibold' : 'text-slate-300 hover:text-white'}`}>
               Dashboard
             </Link>
-            <span className="text-slate-500 text-xs">{user?.email}</span>
+            <span className="text-slate-500 text-xs">{email}</span>
             <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-red-400 transition-colors">
               Sign Out
             </button>

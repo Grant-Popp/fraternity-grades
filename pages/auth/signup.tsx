@@ -47,7 +47,7 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="label">Email Address</label>
-              <input className="input" type="email" placeholder="you@university.edu (must be .edu)" value={form.email}
+              <input className="input" type="email" placeholder="Enter .edu email" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
             </div>
             <div>

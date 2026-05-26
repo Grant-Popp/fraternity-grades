@@ -13,6 +13,8 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   const [editDeadline, setEditDeadline] = useState('')
   const [saving, setSaving] = useState(false)
   const [emailStatus, setEmailStatus] = useState<Record<string, string>>({})
+  const [archiveStatus, setArchiveStatus] = useState<Record<string, string>>({})
+  const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,6 +54,23 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     })
     if (res.ok) {
       setSemesters(prev => prev.map(p => p.id === s.id ? { ...p, is_active: !s.is_active } : p))
+    }
+  }
+
+  const archiveSemester = async (semesterId: string) => {
+    setArchiveStatus(prev => ({ ...prev, [semesterId]: 'Archiving…' }))
+    setArchiveConfirm(null)
+    const res = await fetch('/api/semesters/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semesterId }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setSemesters(prev => prev.map(s => s.id === semesterId ? { ...s, is_active: false } : s))
+      setArchiveStatus(prev => ({ ...prev, [semesterId]: `✓ Archived — ${data.photosDeleted} photos deleted` }))
+    } else {
+      setArchiveStatus(prev => ({ ...prev, [semesterId]: `Error: ${data.error}` }))
     }
   }
 
@@ -133,6 +152,22 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
                   <button onClick={() => toggleActive(s)} className="btn-secondary text-xs py-1 px-3">
                     {s.is_active ? 'Deactivate' : 'Activate'}
                   </button>
+                  {!s.is_active && (
+                    archiveConfirm === s.id ? (
+                      <div className="flex gap-2 items-center">
+                        <span className="text-xs text-red-400">Delete all photos?</span>
+                        <button onClick={() => archiveSemester(s.id)} className="btn-danger text-xs py-1 px-2">Yes, archive</button>
+                        <button onClick={() => setArchiveConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setArchiveConfirm(s.id)} className="text-xs text-slate-400 hover:text-red-400 transition-colors">
+                        🗑 Archive photos
+                      </button>
+                    )
+                  )}
+                  {archiveStatus[s.id] && (
+                    <span className="text-xs text-green-400">{archiveStatus[s.id]}</span>
+                  )}
                 </div>
               </div>
 

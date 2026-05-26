@@ -39,6 +39,13 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
+
+    const MAX_MB = 5
+    if (f.size > MAX_MB * 1024 * 1024) {
+      setError(`File is too large. Please upload an image under ${MAX_MB}MB. Screenshots are usually well under 1MB.`)
+      return
+    }
+
     setFile(f)
     setPreview(URL.createObjectURL(f))
     setStep('ocr')

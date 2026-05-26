@@ -17,6 +17,7 @@ export default function SignupPage() {
     if (form.password !== form.confirm) return setError('Passwords do not match.')
     if (form.password.length < 6) return setError('Password must be at least 6 characters.')
     if (!form.full_name.trim()) return setError('Please enter your full name.')
+    if (!form.email.toLowerCase().endsWith('.edu')) return setError('Please use your university .edu email address.')
 
     setLoading(true)
     const { error: signupError } = await supabase.auth.signUp({
@@ -46,7 +47,7 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="label">Email Address</label>
-              <input className="input" type="email" placeholder="you@university.edu" value={form.email}
+              <input className="input" type="email" placeholder="you@university.edu (must be .edu)" value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
             </div>
             <div>

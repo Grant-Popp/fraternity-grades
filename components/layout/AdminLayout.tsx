@@ -1,0 +1,80 @@
+import { useRouter } from 'next/router'
+import { useSupabaseClient } from '@supabase/auth-helpers-react'
+import Link from 'next/link'
+
+interface AdminLayoutProps {
+  children: React.ReactNode
+  title?: string
+}
+
+const navItems = [
+  { href: '/admin',             label: 'Dashboard',   icon: '📊' },
+  { href: '/admin/submissions', label: 'Submissions',  icon: '📋' },
+  { href: '/admin/members',     label: 'Members',      icon: '👥' },
+  { href: '/admin/semesters',   label: 'Semesters',    icon: '📅' },
+  { href: '/admin/export',      label: 'Export Excel', icon: '📥' },
+]
+
+export default function AdminLayout({ children, title }: AdminLayoutProps) {
+  const router = useRouter()
+  const supabase = useSupabaseClient()
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-900 flex">
+      {/* Sidebar */}
+      <aside className="w-56 bg-slate-800 border-r border-slate-700 flex flex-col min-h-screen">
+        <div className="p-5 border-b border-slate-700">
+          <p className="text-amber-500 font-bold text-base">📚 Grade Portal</p>
+          <p className="text-xs text-slate-400 mt-1">Admin Panel</p>
+        </div>
+
+        <nav className="flex-1 p-3 space-y-1">
+          {navItems.map(item => {
+            const active = router.pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  active
+                    ? 'bg-amber-500 text-slate-900 font-semibold'
+                    : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                <span>{item.icon}</span>
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="p-3 border-t border-slate-700">
+          <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-white rounded-lg hover:bg-slate-700">
+            ← Member View
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-700 mt-1"
+          >
+            🚪 Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+          <h1 className="text-xl font-bold text-white">{title ?? 'Admin'}</h1>
+        </header>
+        <main className="flex-1 p-6 overflow-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  )
+}

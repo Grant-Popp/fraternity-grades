@@ -1,0 +1,82 @@
+import nodemailer from 'nodemailer'
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+})
+
+export type EmailType = 'reminder' | 'deadline_warning' | 'confirmation'
+
+interface SendEmailOptions {
+  to: string
+  memberName: string
+  semesterName: string
+  deadline?: string
+  submitUrl?: string
+  type: EmailType
+}
+
+const SUBJECTS: Record<EmailType, (s: string) => string> = {
+  reminder:         (s) => `Grade Submission Open — ${s}`,
+  deadline_warning: (s) => `⚠️ Grade Submission Due Soon — ${s}`,
+  confirmation:     (s) => `✅ Grade Submission Received — ${s}`,
+}
+
+function buildBody(opts: SendEmailOptions): string {
+  const { memberName, semesterName, deadline, submitUrl, type } = opts
+  const btn = submitUrl
+    ? `<p style="margin:24px 0"><a href="${submitUrl}" style="background:#f59e0b;color:#1e293b;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">Submit Your Grades</a></p>`
+    : ''
+
+  const bodies: Record<EmailType, string> = {
+    reminder: `
+      <p>Hi ${memberName},</p>
+      <p>Grade submissions are now open for <strong>${semesterName}</strong>.</p>
+      <p><strong>Deadline:</strong> ${deadline}</p>
+      ${btn}
+      <p>Log into Blackboard, screenshot your grades page, and upload it through the portal. You can also select "No Grade" if you are not enrolled this semester.</p>
+    `,
+    deadline_warning: `
+      <p>Hi ${memberName},</p>
+      <p>This is a reminder that grade submissions for <strong>${semesterName}</strong> are due soon.</p>
+      <p><strong>Deadline:</strong> ${deadline}</p>
+      ${btn}
+      <p>Please submit as soon as possible to avoid being marked as non-compliant.</p>
+    `,
+    confirmation: `
+      <p>Hi ${memberName},</p>
+      <p>Your grade submission for <strong>${semesterName}</strong> has been received successfully.</p>
+      <p>The VP of Academics will review your submission and no further action is needed from you.</p>
+    `,
+  }
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;">
+      <div style="background:#0f172a;padding:20px 24px;border-radius:12px 12px 0 0;">
+        <h1 style="color:#f59e0b;margin:0;font-size:20px;">Chapter Grade Portal</h1>
+      </div>
+      <div style="background:#ffffff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;">
+        ${bodies[type]}
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0"/>
+        <p style="color:#94a3b8;font-size:12px;margin:0">This is an automated message from your chapter's academic portal. Do not reply to this email.</p>
+      </div>
+    </body>
+    </html>
+  `
+}
+
+export async function sendEmail(opts: SendEmailOptions) {
+  await transporter.sendMail({
+    from: `"Chapter Academics" <${process.env.GMAIL_USER}>`,
+    to: opts.to,
+    subject: SUBJECTS[opts.type](opts.semesterName),
+    html: buildBody(opts),
+  })
+}

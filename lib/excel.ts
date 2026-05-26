@@ -1,0 +1,283 @@
+import ExcelJS from 'exceljs'
+import type { Profile, Submission, Semester } from './database.types'
+
+const GOLD = 'FFFFF59E0B' // actually ARGB: FF + hex color
+const DARK_NAVY = 'FF0F172A'
+const WHITE = 'FFFFFFFF'
+const GREEN = 'FF166534'
+const YELLOW = 'FF854D0E'
+const RED = 'FF991B1B'
+const LIGHT_GREEN = 'FFBBF7D0'
+const LIGHT_YELLOW = 'FFFEF08A'
+const LIGHT_RED = 'FFFECACA'
+const GREY_BG = 'FFF1F5F9'
+
+function gpaFill(gpa: number | null): { type: 'pattern'; pattern: 'solid'; fgColor: { argb: string } } | undefined {
+  if (gpa === null) return undefined
+  const argb = gpa >= 3.0 ? LIGHT_GREEN : gpa >= 2.0 ? LIGHT_YELLOW : LIGHT_RED
+  return { type: 'pattern', pattern: 'solid', fgColor: { argb } }
+}
+
+function gpaFontColor(gpa: number | null): string {
+  if (gpa === null) return 'FF475569'
+  return gpa >= 3.0 ? GREEN : gpa >= 2.0 ? YELLOW : RED
+}
+
+function headerRow(sheet: ExcelJS.Worksheet, cols: string[], rowNum: number) {
+  const row = sheet.getRow(rowNum)
+  cols.forEach((col, i) => {
+    const cell = row.getCell(i + 1)
+    cell.value = col
+    cell.font = { bold: true, color: { argb: WHITE }, size: 11 }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+    cell.border = { bottom: { style: 'thin', color: { argb: GOLD } } }
+    cell.alignment = { vertical: 'middle', horizontal: 'center' }
+  })
+  row.height = 24
+}
+
+export async function generateExcel(
+  members: Profile[],
+  submissions: Submission[],
+  semester: Semester
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Chapter Grade Portal'
+  workbook.created = new Date()
+
+  // Index submissions by member
+  const subByMember = new Map<string, Submission>()
+  submissions.forEach(s => subByMember.set(s.member_id, s))
+
+  const sorted = [...members].sort((a, b) => {
+    const ga = subByMember.get(a.id)?.final_gpa ?? -1
+    const gb = subByMember.get(b.id)?.final_gpa ?? -1
+    return gb - ga
+  })
+
+  // ── Summary Sheet ──────────────────────────────────────────
+  {
+    const ws = workbook.addWorksheet('Summary')
+    ws.columns = [
+      { key: 'name',      width: 24 },
+      { key: 'email',     width: 28 },
+      { key: 'year',      width: 14 },
+      { key: 'gpa',       width: 10 },
+      { key: 'status',    width: 14 },
+      { key: 'submitted', width: 22 },
+    ]
+
+    // Title
+    ws.mergeCells('A1:F1')
+    const title = ws.getCell('A1')
+    title.value = `Chapter Grade Report — ${semester.name}`
+    title.font = { bold: true, size: 14, color: { argb: DARK_NAVY } }
+    title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD } }
+    title.alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getRow(1).height = 30
+
+    ws.mergeCells('A2:F2')
+    ws.getCell('A2').value = `Deadline: ${new Date(semester.deadline).toLocaleString()}  |  Generated: ${new Date().toLocaleString()}`
+    ws.getCell('A2').font = { italic: true, color: { argb: 'FF64748B' }, size: 10 }
+    ws.getCell('A2').alignment = { horizontal: 'center' }
+
+    headerRow(ws, ['Member Name', 'Email', 'Class Year', 'GPA', 'Status', 'Submitted At'], 3)
+
+    sorted.forEach((m, i) => {
+      const sub = subByMember.get(m.id)
+      const gpa = sub?.final_gpa ?? null
+      const row = ws.getRow(4 + i)
+
+      row.getCell(1).value = m.full_name
+      row.getCell(2).value = m.email
+      row.getCell(3).value = m.class_year
+      row.getCell(4).value = gpa !== null ? +gpa.toFixed(2) : '—'
+      row.getCell(5).value = sub?.status ?? 'Not Submitted'
+      row.getCell(6).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
+
+      const gpaCell = row.getCell(4)
+      if (gpa !== null) {
+        gpaCell.fill = gpaFill(gpa)!
+        gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true }
+      }
+      gpaCell.alignment = { horizontal: 'center' }
+      row.getCell(3).alignment = { horizontal: 'center' }
+      row.getCell(5).alignment = { horizontal: 'center' }
+      row.getCell(6).alignment = { horizontal: 'center' }
+
+      if (i % 2 === 0) {
+        [1,2,3,5,6].forEach(c => {
+          row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+        })
+      }
+    })
+
+    // Chapter averages
+    const gpas = sorted.map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((g): g is number => g !== null)
+    const chapterAvg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
+    const afterData = 4 + sorted.length + 1
+
+    const avgRow = ws.getRow(afterData)
+    avgRow.getCell(1).value = 'Chapter Average'
+    avgRow.getCell(1).font = { bold: true }
+    avgRow.getCell(4).value = chapterAvg !== null ? +chapterAvg.toFixed(2) : '—'
+    avgRow.getCell(4).font = { bold: true }
+    avgRow.getCell(4).fill = gpaFill(chapterAvg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+
+    const years = ['Freshman','Sophomore','Junior','Senior'] as const
+    years.forEach((yr, yi) => {
+      const yrGpas = sorted
+        .filter(m => m.class_year === yr)
+        .map(m => subByMember.get(m.id)?.final_gpa ?? null)
+        .filter((g): g is number => g !== null)
+      const avg = yrGpas.length ? yrGpas.reduce((a,b) => a+b, 0) / yrGpas.length : null
+      const r = ws.getRow(afterData + 1 + yi)
+      r.getCell(1).value = `${yr} Average`
+      r.getCell(1).font = { italic: true }
+      r.getCell(4).value = avg !== null ? +avg.toFixed(2) : '—'
+      r.getCell(4).fill = gpaFill(avg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+    })
+
+    ws.views = [{ state: 'frozen', ySplit: 3 }]
+  }
+
+  // ── By Class Year Sheet ────────────────────────────────────
+  {
+    const ws = workbook.addWorksheet('By Class Year')
+    ws.columns = [{ key: 'name', width: 24 }, { key: 'gpa', width: 10 }, { key: 'status', width: 14 }]
+    let currentRow = 1
+    const years = ['Freshman','Sophomore','Junior','Senior'] as const
+
+    for (const yr of years) {
+      const group = sorted.filter(m => m.class_year === yr)
+      ws.mergeCells(`A${currentRow}:C${currentRow}`)
+      const hdr = ws.getCell(`A${currentRow}`)
+      hdr.value = yr
+      hdr.font = { bold: true, size: 13, color: { argb: WHITE } }
+      hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+      hdr.alignment = { horizontal: 'center' }
+      ws.getRow(currentRow).height = 22
+      currentRow++
+
+      headerRow(ws, ['Name', 'GPA', 'Status'], currentRow)
+      currentRow++
+
+      group.forEach((m, i) => {
+        const sub = subByMember.get(m.id)
+        const gpa = sub?.final_gpa ?? null
+        const row = ws.getRow(currentRow + i)
+        row.getCell(1).value = m.full_name
+        row.getCell(2).value = gpa !== null ? +gpa.toFixed(2) : '—'
+        row.getCell(3).value = sub?.status ?? 'Not Submitted'
+        if (gpa !== null) {
+          row.getCell(2).fill = gpaFill(gpa)!
+          row.getCell(2).font = { color: { argb: gpaFontColor(gpa) }, bold: true }
+        }
+        row.getCell(2).alignment = { horizontal: 'center' }
+        row.getCell(3).alignment = { horizontal: 'center' }
+      })
+      currentRow += group.length
+
+      const yrGpas = group.map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((g): g is number => g !== null)
+      const avg = yrGpas.length ? yrGpas.reduce((a,b) => a+b, 0) / yrGpas.length : null
+      const avgR = ws.getRow(currentRow)
+      avgR.getCell(1).value = `${yr} Avg`
+      avgR.getCell(1).font = { bold: true, italic: true }
+      avgR.getCell(2).value = avg !== null ? +avg.toFixed(2) : '—'
+      avgR.getCell(2).font = { bold: true }
+      if (avg !== null) avgR.getCell(2).fill = gpaFill(avg)!
+      currentRow += 3
+    }
+  }
+
+  // ── Individual Member Sheets ───────────────────────────────
+  for (const m of members) {
+    const sheetName = m.full_name.substring(0, 28).replace(/[*?:/\\[\]]/g, '')
+    const ws = workbook.addWorksheet(sheetName)
+    ws.columns = [
+      { key: 'label',    width: 20 },
+      { key: 'value',    width: 30 },
+    ]
+
+    // Member info block
+    const infoRows = [
+      ['Name', m.full_name],
+      ['Email', m.email],
+      ['Class Year', m.class_year],
+      ['Role', m.role],
+    ]
+    infoRows.forEach(([label, value], i) => {
+      ws.getRow(i + 1).getCell(1).value = label
+      ws.getRow(i + 1).getCell(1).font = { bold: true, color: { argb: DARK_NAVY } }
+      ws.getRow(i + 1).getCell(2).value = value
+    })
+
+    ws.getRow(6).getCell(1).value = ''
+    headerRow(ws, ['Semester', 'OCR GPA', 'Admin GPA', 'Final GPA', 'Status', 'Submitted', 'Notes'], 7)
+    ws.columns = [
+      { key: 'semester',   width: 18 },
+      { key: 'ocr_gpa',    width: 10 },
+      { key: 'admin_gpa',  width: 12 },
+      { key: 'final_gpa',  width: 10 },
+      { key: 'status',     width: 14 },
+      { key: 'submitted',  width: 22 },
+      { key: 'notes',      width: 30 },
+    ]
+
+    const sub = subByMember.get(m.id)
+    if (sub) {
+      const r = ws.getRow(8)
+      r.getCell(1).value = semester.name
+      r.getCell(2).value = sub.ocr_gpa ?? '—'
+      r.getCell(3).value = sub.admin_gpa ?? '—'
+      r.getCell(4).value = sub.final_gpa ?? '—'
+      r.getCell(5).value = sub.status
+      r.getCell(6).value = new Date(sub.submitted_at).toLocaleString()
+      r.getCell(7).value = sub.admin_notes ?? ''
+      if (sub.final_gpa !== null) {
+        r.getCell(4).fill = gpaFill(sub.final_gpa)!
+        r.getCell(4).font = { bold: true, color: { argb: gpaFontColor(sub.final_gpa) } }
+      }
+      if (sub.duplicate_flag) {
+        r.getCell(2).note = '⚠ Possible duplicate photo detected'
+      }
+    } else {
+      ws.getRow(8).getCell(1).value = 'No submission for this semester'
+      ws.getRow(8).getCell(1).font = { italic: true, color: { argb: 'FF94A3B8' } }
+    }
+  }
+
+  // ── Non-Submitters Sheet ───────────────────────────────────
+  {
+    const ws = workbook.addWorksheet('Non-Submitters')
+    ws.columns = [
+      { key: 'name',  width: 24 },
+      { key: 'email', width: 28 },
+      { key: 'year',  width: 14 },
+    ]
+
+    ws.mergeCells('A1:C1')
+    ws.getCell('A1').value = `Non-Submitters — ${semester.name}`
+    ws.getCell('A1').font = { bold: true, size: 13, color: { argb: WHITE } }
+    ws.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: RED } }
+    ws.getCell('A1').alignment = { horizontal: 'center' }
+
+    headerRow(ws, ['Name', 'Email', 'Class Year'], 2)
+
+    const nonSubmitters = members.filter(m => !subByMember.has(m.id))
+    nonSubmitters.forEach((m, i) => {
+      const row = ws.getRow(3 + i)
+      row.getCell(1).value = m.full_name
+      row.getCell(2).value = m.email
+      row.getCell(3).value = m.class_year
+    })
+
+    if (nonSubmitters.length === 0) {
+      ws.getRow(3).getCell(1).value = '✅ All members submitted!'
+      ws.getRow(3).getCell(1).font = { color: { argb: GREEN }, bold: true }
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return Buffer.from(buffer)
+}

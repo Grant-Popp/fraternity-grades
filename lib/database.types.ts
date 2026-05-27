@@ -12,6 +12,7 @@ export type Semester = {
   name: string
   deadline: string
   is_active: boolean
+  required_years: string[]
   created_at: string
 }
 

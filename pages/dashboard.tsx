@@ -134,7 +134,10 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { data: submissions } = await supabase.from('submissions').select('*').eq('member_id', session!.user.id)
 
   const subMap = new Map((submissions ?? []).map(s => [s.semester_id, s]))
-  const enriched = (semesters ?? []).map(s => ({ ...s, submission: subMap.get(s.id) ?? null }))
+  const memberYear = profile?.class_year ?? ''
+  const enriched = (semesters ?? [])
+    .filter(s => !s.required_years?.length || s.required_years.includes(memberYear))
+    .map(s => ({ ...s, submission: subMap.get(s.id) ?? null }))
 
   return { props: { profile, semesters: enriched } }
 }

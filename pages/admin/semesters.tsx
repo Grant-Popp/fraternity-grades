@@ -12,6 +12,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   const [semesters, setSemesters] = useState(initial)
   const [formName, setFormName] = useState('')
   const [formDeadline, setFormDeadline] = useState<Date | null>(null)
+  const [formYears, setFormYears] = useState<string[]>(ALL_YEARS)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
@@ -34,13 +35,14 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     const res = await fetch('/api/semesters/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: formName, deadline: formDeadline.toISOString() }),
+      body: JSON.stringify({ name: formName, deadline: formDeadline.toISOString(), required_years: formYears }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); setCreating(false); return }
     setSemesters(prev => [data.semester, ...prev])
     setFormName('')
     setFormDeadline(null)
+    setFormYears(ALL_YEARS)
     setCreating(false)
   }
 
@@ -125,6 +127,10 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
               </span>
               {isPast && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">Deadline Passed</span>}
             </div>
+
+            <p className="text-slate-500 text-xs mt-0.5 mb-1">
+              Required: {(s.required_years ?? ALL_YEARS).join(', ')}
+            </p>
 
             {editId === s.id ? (
               <div className="flex items-center gap-2 mt-2">
@@ -266,7 +272,28 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
               minDate={new Date()}
             />
           </div>
-          <button type="submit" className="btn-primary" disabled={creating}>
+          <div className="w-full">
+            <label className="label">Required Years</label>
+            <div className="flex gap-2 flex-wrap">
+              {ALL_YEARS.map(yr => (
+                <button type="button" key={yr}
+                  onClick={() => setFormYears(prev => prev.includes(yr) ? prev.filter(y => y !== yr) : [...prev, yr])}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    formYears.includes(yr)
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
+                  }`}
+                >
+                  {yr}
+                </button>
+              ))}
+              <button type="button" onClick={() => setFormYears(formYears.length === ALL_YEARS.length ? [] : ALL_YEARS)}
+                className="text-xs text-slate-500 hover:text-slate-300 ml-1">
+                {formYears.length === ALL_YEARS.length ? 'Deselect all' : 'Select all'}
+              </button>
+            </div>
+          </div>
+          <button type="submit" className="btn-primary self-end" disabled={creating || formYears.length === 0}>
             {creating ? 'Creating…' : '+ Create'}
           </button>
         </form>

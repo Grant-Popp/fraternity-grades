@@ -23,6 +23,8 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
 
   const toggleRole = async (m: MemberRow) => {
     const newRole = m.role === 'admin' ? 'member' : 'admin'
+    const action = newRole === 'admin' ? `Make ${m.full_name} an admin?` : `Remove admin access from ${m.full_name}?`
+    if (!window.confirm(action)) return
     setSavingId(m.id)
     const res = await fetch('/api/members/update-role', {
       method: 'PATCH',
@@ -47,6 +49,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
       </div>
 
       <div className="card !p-0 overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-900/60 border-b border-slate-700">
@@ -89,6 +92,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
         {filtered.length === 0 && (
           <p className="text-center text-slate-400 py-10">No members found.</p>
         )}
+        </div>
       </div>
     </AdminLayout>
   )

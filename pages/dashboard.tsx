@@ -4,6 +4,7 @@ import type { Profile, Semester, Submission } from '@/lib/database.types'
 import Layout from '@/components/layout/Layout'
 import Link from 'next/link'
 import { gpaColorClass } from '@/lib/gpa'
+import { useState, useEffect } from 'react'
 
 interface Props {
   profile: Profile
@@ -18,7 +19,12 @@ function StatusBadge({ submission }: { submission: Submission | null }) {
 }
 
 function DeadlineCountdown({ deadline }: { deadline: string }) {
-  const diff = new Date(deadline).getTime() - Date.now()
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
+  const diff = new Date(deadline).getTime() - now
   if (diff < 0) return <span className="text-red-400 text-sm">Deadline passed</span>
   const days = Math.floor(diff / 86400000)
   const hours = Math.floor((diff % 86400000) / 3600000)

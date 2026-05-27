@@ -8,6 +8,8 @@ import fs from 'fs'
 
 export const config = { api: { bodyParser: false } }
 
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -18,13 +20,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // JSON path: no-grade submission
   if (contentType.includes('application/json')) {
-    const body = await new Promise<any>((resolve) => {
-      let data = ''
-      req.on('data', chunk => { data += chunk })
-      req.on('end', () => resolve(JSON.parse(data)))
-    })
+    let body: any
+    try {
+      body = await new Promise<any>((resolve, reject) => {
+        let data = ''
+        req.on('data', chunk => { data += chunk })
+        req.on('end', () => { try { resolve(JSON.parse(data)) } catch { reject(new Error('Invalid JSON')) } })
+        req.on('error', reject)
+      })
+    } catch {
+      return res.status(400).json({ error: 'Invalid request body' })
+    }
 
     const { semesterId } = body
+    if (!semesterId) return res.status(400).json({ error: 'semesterId required' })
 
     const { data: semester } = await supabaseAdmin.from('semesters').select('deadline').eq('id', semesterId).single()
     if (!semester) return res.status(404).json({ error: 'Semester not found' })
@@ -61,16 +70,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!semesterId || !imageFile) return res.status(400).json({ error: 'Missing required fields' })
 
+  // Validate MIME type
+  if (!ALLOWED_MIME_TYPES.includes(imageFile.mimetype ?? '')) {
+    return res.status(400).json({ error: 'Only image files are allowed (JPG, PNG, WebP, GIF)' })
+  }
+
   const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
   if (new Date(semester.deadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
 
   const { data: existing } = await supabaseAdmin.from('submissions')
-    .select('id').eq('member_id', user.id).eq('semester_id', semesterId).single()
+    .select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
   if (existing) return res.status(400).json({ error: 'Already submitted for this semester' })
 
-  const fileBuffer = fs.readFileSync(imageFile.filepath)
-  const ext = imageFile.originalFilename?.split('.').pop() ?? 'jpg'
+  // Read file safely
+  let fileBuffer: Buffer
+  try {
+    fileBuffer = fs.readFileSync(imageFile.filepath)
+  } catch {
+    return res.status(400).json({ error: 'File could not be read. Please try again.' })
+  }
+
+  const ext = imageFile.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
   const storagePath = `${user.id}/${semesterId}.${ext}`
 
   const { error: uploadError } = await supabaseAdmin.storage
@@ -79,6 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
+  // Compute perceptual hash for duplicate detection
   let photo_phash: string | null = null
   let duplicate_flag = false
   try {
@@ -107,7 +129,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     duplicate_flag,
   })
 
-  if (insertError) return res.status(500).json({ error: insertError.message })
+  // Clean up orphaned storage file if insert failed
+  if (insertError) {
+    await supabaseAdmin.storage.from('grade-photos').remove([storagePath])
+    return res.status(500).json({ error: insertError.message })
+  }
 
   try {
     const { data: profile } = await supabaseAdmin.from('profiles').select('full_name,email').eq('id', user.id).single()

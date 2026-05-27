@@ -13,6 +13,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { name, deadline, required_years } = req.body
   if (!name || !deadline) return res.status(400).json({ error: 'Name and deadline are required' })
+  if (typeof name !== 'string' || name.trim().length > 100) return res.status(400).json({ error: 'Semester name must be 100 characters or less' })
+  if (isNaN(Date.parse(deadline))) return res.status(400).json({ error: 'Invalid deadline date' })
 
   const years = Array.isArray(required_years) && required_years.length > 0
     ? required_years

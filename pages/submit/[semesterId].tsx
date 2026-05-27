@@ -2,7 +2,7 @@ import { GetServerSideProps } from 'next'
 import { requireAuth } from '@/lib/auth'
 import type { Semester } from '@/lib/database.types'
 import Layout from '@/components/layout/Layout'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { GRADE_MAP } from '@/lib/gpa'
 
@@ -28,6 +28,12 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
   const [step, setStep] = useState<Step>('choose')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [ocrFailed, setOcrFailed] = useState(false)
+
+  // Revoke blob URL on cleanup to prevent memory leaks
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview) }
+  }, [preview])
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrState, setOcrState] = useState<OcrState | null>(null)
   const [selectedGrade, setSelectedGrade] = useState<string>('')
@@ -46,10 +52,12 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
       return
     }
 
+    if (preview) URL.revokeObjectURL(preview)
     setFile(f)
     setPreview(URL.createObjectURL(f))
     setStep('ocr')
     setOcrLoading(true)
+    setOcrFailed(false)
 
     try {
       const { runOcr } = await import('@/lib/ocr')
@@ -57,6 +65,7 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
       setOcrState(result)
       setSelectedGrade(result.detectedGrade ?? '')
     } catch {
+      setOcrFailed(true)
       setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [] })
     } finally {
       setOcrLoading(false)
@@ -242,7 +251,9 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
 
               {ocrState.confidence === 'none' && (
                 <p className="text-amber-400 text-sm mt-2 bg-amber-900/20 px-3 py-2 rounded-lg">
-                  ⚠️ Could not detect a grade automatically. Please select your grade from the dropdown above.
+                  {ocrFailed
+                    ? '⚠️ Scan failed — please select your grade manually from the dropdown above.'
+                    : '⚠️ No grade found in your screenshot. Please select your grade from the dropdown above.'}
                 </p>
               )}
             </div>

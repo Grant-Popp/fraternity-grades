@@ -9,6 +9,7 @@ interface Stats {
   activeSubmissions: number
   pendingReview: number
   chapterGpa: number | null
+  reviewedCount: number
   byYear: Record<string, { count: number; avg: number | null }>
   byMajor: { major: string; count: number; avg: number | null }[]
   activeSemester: { id: string; name: string; deadline: string; submitted: number; total: number } | null
@@ -24,10 +25,10 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
       {/* Top stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Members', value: stats.totalMembers, icon: '👥' },
-          { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0 },
-          { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa },
-          { label: 'Active Semester', value: stats.activeSemester?.name ?? 'None', icon: '📅', small: true },
+          { label: 'Total Members', value: stats.totalMembers, icon: '👥', note: null },
+          { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0, note: null },
+          { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa, note: stats.chapterGpa ? `${stats.reviewedCount} submitted grades` : null },
+          { label: 'Active Semester', value: stats.activeSemester?.name ?? 'None', icon: '📅', small: true, note: null },
         ].map(s => (
           <div key={s.label} className={`card !p-4 ${s.alert ? 'border-amber-500' : ''}`}>
             <p className="text-2xl mb-1">{s.icon}</p>
@@ -35,6 +36,7 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
               {String(s.value)}
             </p>
             <p className="text-slate-400 text-xs mt-1">{s.label}</p>
+            {s.note && <p className="text-slate-500 text-xs mt-0.5">{s.note}</p>}
           </div>
         ))}
       </div>
@@ -177,5 +179,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     total: totalMembers,
   } : null
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, chapterGpa, byYear, byMajor, activeSemester: activeSemesterData } } }
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData } } }
 }

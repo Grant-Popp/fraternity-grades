@@ -37,7 +37,7 @@ export async function requireAuth(ctx: GetServerSidePropsContext) {
     return { redirect: { destination: '/auth/login', permanent: false }, supabase, session: null, profile: null }
   }
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
   const session = { user }
 
   return { supabase, session, profile, redirect: null }

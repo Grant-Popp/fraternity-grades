@@ -17,6 +17,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: semester } = await supabaseAdmin.from('semesters').select('name,deadline').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
 
+  // Rate limit: prevent sending the same email type for a semester more than once per 60 seconds
+  const debounceWindow = new Date(Date.now() - 60 * 1000).toISOString()
+  const { count: recentSendCount } = await supabaseAdmin.from('email_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('semester_id', semesterId)
+    .eq('type', type)
+    .gte('sent_at', debounceWindow)
+  if ((recentSendCount ?? 0) > 0) {
+    return res.status(429).json({ error: 'Please wait at least 60 seconds before sending again.' })
+  }
+
   let query = supabaseAdmin.from('profiles').select('id,full_name,email').eq('role', 'member')
   if (classYears && classYears.length > 0) query = query.in('class_year', classYears)
   const { data: members } = await query

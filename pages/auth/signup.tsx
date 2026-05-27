@@ -7,7 +7,7 @@ const CLASS_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior']
 
 export default function SignupPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman' })
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman', major: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -22,7 +22,7 @@ export default function SignupPage() {
     const { data, error: signupError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: { data: { full_name: form.full_name.trim(), class_year: form.class_year } },
+      options: { data: { full_name: form.full_name.trim(), class_year: form.class_year, major: form.major.trim() || null } },
     })
 
     if (signupError) { setError(signupError.message); setLoading(false); return }
@@ -60,6 +60,11 @@ export default function SignupPage() {
                 onChange={e => setForm(f => ({ ...f, class_year: e.target.value }))}>
                 {CLASS_YEARS.map(yr => <option key={yr}>{yr}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="label">Major <span className="text-slate-500">(optional)</span></label>
+              <input className="input" type="text" placeholder="e.g. Finance, Engineering" value={form.major}
+                onChange={e => setForm(f => ({ ...f, major: e.target.value }))} />
             </div>
             <div>
               <label className="label">Password</label>

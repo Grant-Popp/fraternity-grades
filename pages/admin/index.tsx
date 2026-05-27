@@ -10,6 +10,7 @@ interface Stats {
   pendingReview: number
   chapterGpa: number | null
   byYear: Record<string, { count: number; avg: number | null }>
+  byMajor: { major: string; count: number; avg: number | null }[]
   activeSemester: { id: string; name: string; deadline: string; submitted: number; total: number } | null
 }
 
@@ -57,7 +58,7 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
         {/* By class year */}
         <div className="card">
           <h2 className="font-semibold text-white mb-4">Average GPA by Class Year</h2>
@@ -79,6 +80,31 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
           </div>
         </div>
 
+        {/* By major */}
+        <div className="card">
+          <h2 className="font-semibold text-white mb-4">Average GPA by Major</h2>
+          {stats.byMajor.length === 0 ? (
+            <p className="text-slate-400 text-sm">No major data yet — members will enter this on signup.</p>
+          ) : (
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {stats.byMajor.map(m => (
+                <div key={m.major} className="flex items-center justify-between">
+                  <span className="text-slate-300 text-sm truncate mr-3">{m.major}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-slate-400 text-xs">{m.count}</span>
+                    <span className={`font-semibold ${m.avg != null ? gpaColorClass(m.avg) : 'text-slate-500'}`}>
+                      {m.avg != null ? m.avg.toFixed(2) : '—'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div /> {/* spacer */}
         {/* Quick actions */}
         <div className="card">
           <h2 className="font-semibold text-white mb-4">Quick Actions</h2>
@@ -98,6 +124,7 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
             ))}
           </div>
         </div>
+        </div>
       </div>
     </AdminLayout>
   )
@@ -107,7 +134,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { redirect, supabase } = await requireAdmin(ctx)
   if (redirect) return { redirect }
 
-  const { data: members } = await supabase.from('profiles').select('id,class_year').eq('role', 'member')
+  const { data: members } = await supabase.from('profiles').select('id,class_year,major').eq('role', 'member')
   const { data: semesters } = await supabase.from('semesters').select('*').eq('is_active', true).order('created_at', { ascending: false })
   const { data: submissions } = await supabase.from('submissions').select('*')
 
@@ -127,11 +154,28 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     }
   }
 
+  // Group by major
+  const majorMap: Record<string, { ids: string[] }> = {}
+  for (const m of members ?? []) {
+    const key = m.major?.trim() || null
+    if (!key) continue
+    if (!majorMap[key]) majorMap[key] = { ids: [] }
+    majorMap[key].ids.push(m.id)
+  }
+  const byMajor = Object.entries(majorMap).map(([major, { ids }]) => {
+    const subs = (submissions ?? []).filter(s => ids.includes(s.member_id) && s.final_gpa != null)
+    return {
+      major,
+      count: ids.length,
+      avg: subs.length ? subs.reduce((a, b) => a + (b.final_gpa ?? 0), 0) / subs.length : null,
+    }
+  }).sort((a, b) => a.major.localeCompare(b.major))
+
   const activeSemesterData = activeSem ? {
     id: activeSem.id, name: activeSem.name, deadline: activeSem.deadline,
     submitted: (submissions ?? []).filter(s => s.semester_id === activeSem.id).length,
     total: totalMembers,
   } : null
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, chapterGpa, byYear, activeSemester: activeSemesterData } } }
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, chapterGpa, byYear, byMajor, activeSemester: activeSemesterData } } }
 }

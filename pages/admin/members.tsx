@@ -50,7 +50,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-900/60 border-b border-slate-700">
-              {['Name','Email','Class Year','Submissions','Latest GPA','Role','Actions'].map(h => (
+              {['Name','Email','Class Year','Major','Submissions','Latest GPA','Role','Actions'].map(h => (
                 <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium">{h}</th>
               ))}
             </tr>
@@ -61,6 +61,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
                 <td className="px-4 py-3 text-white font-medium">{m.full_name}</td>
                 <td className="px-4 py-3 text-slate-400">{m.email}</td>
                 <td className="px-4 py-3 text-slate-300">{m.class_year}</td>
+                <td className="px-4 py-3 text-slate-400">{m.major ?? '—'}</td>
                 <td className="px-4 py-3 text-center text-slate-300">{m.submissionCount}</td>
                 <td className="px-4 py-3 text-center">
                   {m.latestGpa != null

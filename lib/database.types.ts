@@ -3,6 +3,7 @@ export type Profile = {
   full_name: string
   email: string
   class_year: 'Freshman' | 'Sophomore' | 'Junior' | 'Senior'
+  major: string | null
   role: 'member' | 'admin'
   created_at: string
 }

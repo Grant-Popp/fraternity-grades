@@ -39,18 +39,18 @@ export default function Dashboard({ profile, semesters }: Props) {
 
   return (
     <Layout title={`Welcome, ${profile.full_name.split(' ')[0]}`}>
-      <div className="mb-6 flex items-center gap-3">
-        <div className="card !p-4 flex-1">
-          <p className="text-slate-400 text-sm">Class Year</p>
-          <p className="text-white font-semibold">{profile.class_year}</p>
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        <div className="card !p-4">
+          <p className="text-slate-400 text-xs sm:text-sm">Class Year</p>
+          <p className="text-white font-semibold text-sm sm:text-base truncate">{profile.class_year}</p>
         </div>
-        <div className="card !p-4 flex-1">
-          <p className="text-slate-400 text-sm">Semesters Submitted</p>
-          <p className="text-white font-semibold">{semesters.filter(s => s.submission).length}</p>
+        <div className="card !p-4">
+          <p className="text-slate-400 text-xs sm:text-sm">Submitted</p>
+          <p className="text-white font-semibold text-sm sm:text-base">{semesters.filter(s => s.submission).length}</p>
         </div>
-        <div className="card !p-4 flex-1">
-          <p className="text-slate-400 text-sm">Latest GPA</p>
-          <p className="font-semibold">
+        <div className="card !p-4">
+          <p className="text-slate-400 text-xs sm:text-sm">Latest GPA</p>
+          <p className="font-semibold text-sm sm:text-base">
             {(() => {
               const last = [...semesters].reverse().find(s => s.submission?.final_gpa)
               return last?.submission?.final_gpa
@@ -66,18 +66,18 @@ export default function Dashboard({ profile, semesters }: Props) {
           <h2 className="text-lg font-semibold text-white mb-3">Open Submissions</h2>
           <div className="space-y-3">
             {active.map(s => (
-              <div key={s.id} className="card flex items-center justify-between gap-4">
-                <div>
+              <div key={s.id} className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-white">{s.name}</p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <p className="text-slate-400 text-sm">Due: {new Date(s.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                    <p className="text-slate-400 text-sm">Due: {new Date(s.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                     <DeadlineCountdown deadline={s.deadline} />
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={s.submission} />
                   {!s.submission && new Date(s.deadline) > new Date() && (
-                    <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5">
+                    <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5 whitespace-nowrap">
                       Submit Grades →
                     </Link>
                   )}
@@ -100,6 +100,7 @@ export default function Dashboard({ profile, semesters }: Props) {
         <section>
           <h2 className="text-lg font-semibold text-white mb-3">Past Semesters</h2>
           <div className="card overflow-hidden !p-0">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700 bg-slate-900/50">
@@ -124,6 +125,7 @@ export default function Dashboard({ profile, semesters }: Props) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
       )}

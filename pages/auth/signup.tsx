@@ -19,13 +19,18 @@ export default function SignupPage() {
     if (!form.full_name.trim()) return setError('Please enter your full name.')
 
     setLoading(true)
-    const { error: signupError } = await supabase.auth.signUp({
+    const { data, error: signupError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: { data: { full_name: form.full_name.trim(), class_year: form.class_year } },
     })
 
     if (signupError) { setError(signupError.message); setLoading(false); return }
+
+    // Set cookie so middleware and getServerSideProps can read the session
+    if (data.session) {
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in ?? 3600}; SameSite=Lax`
+    }
     router.push('/dashboard')
   }
 

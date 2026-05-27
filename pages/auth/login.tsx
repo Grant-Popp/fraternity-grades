@@ -16,7 +16,12 @@ export default function LoginPage() {
     setLoading(true)
 
     const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-    if (loginError) { setError('Invalid email or password.'); setLoading(false); return }
+    if (loginError) { setError(loginError.message); setLoading(false); return }
+
+    // Set cookie so middleware and getServerSideProps can read the session
+    if (data.session) {
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in ?? 3600}; SameSite=Lax`
+    }
 
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
     router.push(profile?.role === 'admin' ? '/admin' : '/dashboard')

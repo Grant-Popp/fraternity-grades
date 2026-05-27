@@ -13,7 +13,7 @@ interface Props {
   memberCourses: MemberCourse[]
 }
 
-type Step = 'course_entry' | 'course_review' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'done'
+type Step = 'course_entry' | 'course_review' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'not_posted' | 'done'
 
 interface CourseRow {
   key: string
@@ -399,7 +399,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
 
         {/* Step: Choose upload path */}
         {step === 'choose' && (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <label
               htmlFor="grade-photo"
               className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer block"
@@ -408,6 +408,14 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
               <p className="font-bold text-white text-lg">Upload Blackboard Screenshot</p>
               <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
             </label>
+            <button
+              onClick={() => setStep('not_posted')}
+              className="card text-left hover:border-amber-500/50 border-2 border-transparent transition-colors cursor-pointer"
+            >
+              <p className="text-3xl mb-3">⏳</p>
+              <p className="font-bold text-white text-lg">No Current Grade</p>
+              <p className="text-slate-400 text-sm mt-1">Grades haven&apos;t been posted yet. Come back before the deadline to submit.</p>
+            </button>
             <button
               onClick={() => setStep('no_grade')}
               className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
@@ -485,6 +493,20 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 {submitting ? 'Submitting…' : 'Submit Grade'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Step: Grades not posted yet */}
+        {step === 'not_posted' && (
+          <div className="card text-center py-10">
+            <p className="text-4xl mb-4">⏳</p>
+            <h3 className="text-white font-semibold text-lg mb-2">No Current Grade</h3>
+            <p className="text-slate-400 text-sm mb-2">
+              Come back before <strong className="text-amber-400">{new Date(activeDeadline).toLocaleString()}</strong> to submit your grades once they&apos;re posted.
+            </p>
+            <p className="text-slate-500 text-xs mb-6">Nothing has been recorded — you can return to this page at any time before the deadline.</p>
+            <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
+            <button onClick={() => setStep('choose')} className="btn-secondary px-6 ml-3">← Back</button>
           </div>
         )}
 

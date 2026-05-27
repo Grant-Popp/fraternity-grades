@@ -128,6 +128,7 @@ export default function Dashboard({ profile, semesters }: Props) {
 export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { redirect, supabase, session, profile } = await requireAuth(ctx)
   if (redirect) return { redirect }
+  if (profile?.role === 'admin') return { redirect: { destination: '/admin', permanent: false } }
 
   const { data: semesters } = await supabase.from('semesters').select('*').order('created_at', { ascending: false })
   const { data: submissions } = await supabase.from('submissions').select('*').eq('member_id', session!.user.id)

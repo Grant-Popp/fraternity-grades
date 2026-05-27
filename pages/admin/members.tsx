@@ -1,6 +1,7 @@
 import { GetServerSideProps } from 'next'
 import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
+import Link from 'next/link'
 import { useState } from 'react'
 import type { Profile } from '@/lib/database.types'
 
@@ -77,13 +78,18 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggleRole(m)}
-                    disabled={savingId === m.id}
-                    className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-50"
-                  >
-                    {savingId === m.id ? '…' : m.role === 'admin' ? 'Remove admin' : 'Make admin'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <Link href={`/admin/members/${m.id}`} className="text-xs text-amber-400 hover:text-amber-300">
+                      View
+                    </Link>
+                    <button
+                      onClick={() => toggleRole(m)}
+                      disabled={savingId === m.id}
+                      className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-50"
+                    >
+                      {savingId === m.id ? '…' : m.role === 'admin' ? 'Remove admin' : 'Make admin'}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

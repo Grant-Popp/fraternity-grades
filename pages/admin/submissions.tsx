@@ -20,17 +20,21 @@ interface Props {
 }
 
 function StatusBadge({ s }: { s: EnrichedSubmission }) {
-  if (s.duplicate_flag) return <span className="badge-duplicate">⚠ Review</span>
+  if (s.duplicate_flag && s.status !== 'declined') return <span className="badge-duplicate">⚠ Review</span>
+  if (s.status === 'declined') return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>
   if (s.status === 'reviewed') return <span className="badge-reviewed">Reviewed</span>
   if (s.status === 'no_grade') return <span className="badge-no-grade">No Grade</span>
   return <span className="badge-pending">Pending</span>
 }
 
-function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: string, gpa: number | null, notes: string) => void }) {
+function GpaEditor({ sub, onSave, onDecline }: { sub: EnrichedSubmission; onSave: (id: string, gpa: number | null, notes: string) => void; onDecline: (id: string) => void }) {
   const [editing, setEditing] = useState(false)
   const [grade, setGrade] = useState(sub.admin_gpa?.toString() ?? '')
   const [notes, setNotes] = useState(sub.admin_notes ?? '')
   const [saving, setSaving] = useState(false)
+  const [declining, setDeclining] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
+  const [decliningLoading, setDecliningLoading] = useState(false)
 
   const approve = async () => {
     setSaving(true)
@@ -60,13 +64,25 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
     setEditing(false)
   }
 
+  const confirmDecline = async () => {
+    setDecliningLoading(true)
+    await fetch('/api/submissions/decline', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionId: sub.id, declineReason }),
+    })
+    onDecline(sub.id)
+    setDecliningLoading(false)
+    setDeclining(false)
+  }
+
   if (!editing) {
     return (
       <div className="flex items-center gap-2 flex-wrap">
         <span className={`font-semibold ${sub.final_gpa != null ? gpaColorClass(sub.final_gpa) : 'text-slate-400'}`}>
           {sub.final_gpa?.toFixed(2) ?? '—'}
         </span>
-        {sub.status === 'pending' && !sub.no_grade && (
+        {sub.status === 'pending' && !sub.no_grade && !declining && (
           <>
             <button
               onClick={approve}
@@ -76,10 +92,33 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
               {saving ? '…' : '✓ Approve'}
             </button>
             <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+            <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
           </>
+        )}
+        {sub.status === 'pending' && !sub.no_grade && declining && (
+          <div className="flex items-center gap-1 flex-wrap">
+            <input
+              className="input !py-0.5 !px-2 !text-xs w-36"
+              placeholder="Reason (optional)"
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              maxLength={500}
+            />
+            <button
+              onClick={confirmDecline}
+              disabled={decliningLoading}
+              className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded transition-colors"
+            >
+              {decliningLoading ? '…' : 'Confirm'}
+            </button>
+            <button onClick={() => { setDeclining(false); setDeclineReason('') }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+          </div>
         )}
         {sub.status === 'reviewed' && (
           <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+        )}
+        {sub.status === 'declined' && (
+          <span className="text-xs text-red-400 italic">Declined</span>
         )}
       </div>
     )
@@ -149,6 +188,10 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
     ))
   }
 
+  const handleDecline = (id: string) => {
+    setSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'declined' } : s))
+  }
+
   return (
     <AdminLayout title="Submissions">
       {/* Drop alerts */}
@@ -185,6 +228,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
           <option value="pending">Pending</option>
           <option value="reviewed">Reviewed</option>
           <option value="no_grade">No Grade</option>
+          <option value="declined">Declined</option>
         </select>
         <select className="input !w-auto" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
           <option value="all">All Years</option>
@@ -223,7 +267,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <GpaEditor sub={s} onSave={handleSave} />
+                      <GpaEditor sub={s} onSave={handleSave} onDecline={handleDecline} />
                     </td>
                     <td className="px-4 py-3"><StatusBadge s={s} /></td>
                     <td className="px-4 py-3">

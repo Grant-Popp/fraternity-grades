@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-export type EmailType = 'reminder' | 'deadline_warning' | 'confirmation'
+export type EmailType = 'reminder' | 'deadline_warning' | 'confirmation' | 'declined' | 'at_risk_summary'
 
 interface SendEmailOptions {
   to: string
@@ -19,12 +19,17 @@ interface SendEmailOptions {
   deadline?: string
   submitUrl?: string
   type: EmailType
+  declineReason?: string
+  atRiskMembers?: { name: string; gpa: number }[]
+  threshold?: number
 }
 
 const SUBJECTS: Record<EmailType, (s: string) => string> = {
-  reminder:         (s) => `Grade Submission Open — ${s}`,
-  deadline_warning: (s) => `⚠️ Grade Submission Due Soon — ${s}`,
-  confirmation:     (s) => `✅ Grade Submission Received — ${s}`,
+  reminder:          (s) => `Grade Submission Open — ${s}`,
+  deadline_warning:  (s) => `⚠️ Grade Submission Due Soon — ${s}`,
+  confirmation:      (s) => `✅ Grade Submission Received — ${s}`,
+  declined:          (s) => `❌ Grade Submission Declined — ${s}`,
+  at_risk_summary:   (s) => `⚠️ At-Risk Members — ${s}`,
 }
 
 function buildBody(opts: SendEmailOptions): string {
@@ -52,6 +57,34 @@ function buildBody(opts: SendEmailOptions): string {
       <p>Hi ${memberName},</p>
       <p>Your grade submission for <strong>${semesterName}</strong> has been received successfully.</p>
       <p>The VP of Academics will review your submission and no further action is needed from you.</p>
+    `,
+    declined: `
+      <p>Hi ${memberName},</p>
+      <p>Your grade submission for <strong>${semesterName}</strong> has been <strong style="color:#dc2626;">declined</strong> by the VP of Academics.</p>
+      ${opts.declineReason ? `<p><strong>Reason:</strong> ${opts.declineReason}</p>` : ''}
+      <p>Please log back into the portal and resubmit a correct screenshot of your grades.</p>
+      ${btn}
+      <p>If you have questions, contact your VP of Academics directly.</p>
+    `,
+    at_risk_summary: `
+      <p>Hi ${memberName},</p>
+      <p>The following members are currently below the GPA threshold${opts.threshold != null ? ` of <strong>${opts.threshold.toFixed(2)}</strong>` : ''} for <strong>${semesterName}</strong>:</p>
+      <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+        <thead>
+          <tr style="background:#1e293b;">
+            <th style="text-align:left;padding:8px 12px;color:#94a3b8;font-size:13px;">Member</th>
+            <th style="text-align:left;padding:8px 12px;color:#94a3b8;font-size:13px;">GPA</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(opts.atRiskMembers ?? []).map(m => `
+          <tr style="border-bottom:1px solid #334155;">
+            <td style="padding:8px 12px;color:#f1f5f9;font-size:13px;">${m.name}</td>
+            <td style="padding:8px 12px;color:${m.gpa < 2.0 ? '#f87171' : '#fbbf24'};font-weight:bold;font-size:13px;">${m.gpa.toFixed(2)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p>Please follow up with these members as appropriate.</p>
     `,
   }
 

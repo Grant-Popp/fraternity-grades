@@ -59,11 +59,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Check for duplicate submission in same round (or semester for legacy)
+    // Declined submissions don't block resubmission
     if (roundId) {
-      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).maybeSingle()
+      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).neq('status', 'declined').maybeSingle()
       if (dup) return res.status(400).json({ error: 'Already submitted for this round' })
     } else {
-      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
+      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).neq('status', 'declined').maybeSingle()
       if (dup) return res.status(400).json({ error: 'Already submitted for this semester' })
     }
 
@@ -129,11 +130,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Duplicate check: by round if round-based, else by semester
+  // Declined submissions don't block resubmission
   if (roundId) {
-    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).maybeSingle()
+    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).neq('status', 'declined').maybeSingle()
     if (existing) return res.status(400).json({ error: 'Already submitted for this round' })
   } else {
-    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
+    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).neq('status', 'declined').maybeSingle()
     if (existing) return res.status(400).json({ error: 'Already submitted for this semester' })
   }
 

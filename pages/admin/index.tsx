@@ -3,6 +3,9 @@ import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import Link from 'next/link'
 import { gpaColorClass } from '@/lib/gpa'
+import { useState } from 'react'
+
+interface AtRiskMember { id: string; name: string; gpa: number }
 
 interface Stats {
   totalMembers: number
@@ -14,12 +17,47 @@ interface Stats {
   byYear: Record<string, { count: number; avg: number | null }>
   byMajor: { major: string; count: number; avg: number | null }[]
   activeSemester: { id: string; name: string; deadline: string; submitted: number; total: number } | null
+  gpaThreshold: number
+  atRiskMembers: AtRiskMember[]
 }
 
 export default function AdminDashboard({ stats }: { stats: Stats }) {
   const submitRate = stats.activeSemester
     ? Math.round((stats.activeSemester.submitted / Math.max(stats.activeSemester.total, 1)) * 100)
     : null
+
+  const [threshold, setThreshold] = useState(stats.gpaThreshold.toString())
+  const [savingThreshold, setSavingThreshold] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+
+  const saveThreshold = async () => {
+    const val = parseFloat(threshold)
+    if (isNaN(val) || val < 0 || val > 4.0) return
+    setSavingThreshold(true)
+    await fetch('/api/settings/gpa-threshold', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threshold: val }),
+    })
+    setSavingThreshold(false)
+  }
+
+  const sendAtRiskEmail = async () => {
+    if (!stats.activeSemester || stats.atRiskMembers.length === 0) return
+    setSendingEmail(true)
+    await fetch('/api/email/send-at-risk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        semesterId: stats.activeSemester.id,
+        threshold: parseFloat(threshold) || stats.gpaThreshold,
+        atRiskMembers: stats.atRiskMembers,
+      }),
+    })
+    setSendingEmail(false)
+    setEmailSent(true)
+  }
 
   return (
     <AdminLayout title="Dashboard">
@@ -106,6 +144,51 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
         </div>
       </div>
 
+      {/* At-risk members */}
+      <div className="card mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="font-semibold text-white">At-Risk Members</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 text-xs">GPA threshold:</span>
+            <input
+              type="number"
+              min="0"
+              max="4.0"
+              step="0.1"
+              className="input !py-1 !px-2 !text-xs w-16"
+              value={threshold}
+              onChange={e => setThreshold(e.target.value)}
+            />
+            <button onClick={saveThreshold} disabled={savingThreshold} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">
+              {savingThreshold ? '…' : 'Set'}
+            </button>
+          </div>
+        </div>
+        {stats.atRiskMembers.length === 0 ? (
+          <p className="text-slate-400 text-sm">No members currently below the {stats.gpaThreshold.toFixed(2)} GPA threshold.</p>
+        ) : (
+          <>
+            <div className="space-y-2 mb-4">
+              {stats.atRiskMembers.map(m => (
+                <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-900/10 border border-red-800/30">
+                  <Link href={`/admin/members/${m.id}`} className="text-white text-sm hover:text-amber-400">{m.name}</Link>
+                  <span className={`font-semibold text-sm ${gpaColorClass(m.gpa)}`}>{m.gpa.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            {stats.activeSemester && (
+              <button
+                onClick={sendAtRiskEmail}
+                disabled={sendingEmail || emailSent}
+                className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded transition-colors disabled:opacity-60"
+              >
+                {emailSent ? '✓ Email sent' : sendingEmail ? 'Sending…' : 'Email me this summary'}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="grid md:grid-cols-2 gap-6">
         <div /> {/* spacer */}
         {/* Quick actions */}
@@ -136,7 +219,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { redirect, supabase } = await requireAdmin(ctx)
   if (redirect) return { redirect }
 
-  const { data: members } = await supabase.from('profiles').select('id,class_year,major').eq('role', 'member')
+  const { data: members } = await supabase.from('profiles').select('id,full_name,class_year,major').eq('role', 'member')
   const { data: semesters } = await supabase.from('semesters').select('*').eq('is_active', true).order('created_at', { ascending: false })
   const { data: submissions } = await supabase.from('submissions').select('*')
 
@@ -182,5 +265,23 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     total: totalMembers,
   } : null
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData } } }
+  // Load GPA threshold
+  let gpaThreshold = 2.5
+  try {
+    const { supabaseAdmin } = await import('@/lib/supabaseAdmin')
+    const { data: settings } = await (supabaseAdmin.from('chapter_settings' as any).select('gpa_threshold').maybeSingle())
+    gpaThreshold = (settings as any)?.gpa_threshold ?? 2.5
+  } catch {}
+
+  // Compute at-risk members: latest reviewed GPA below threshold
+  const atRiskMembers: AtRiskMember[] = (members ?? []).flatMap(m => {
+    const memberSubs = (submissions ?? [])
+      .filter((s: any) => s.member_id === m.id && s.final_gpa != null)
+      .sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())
+    const latest = memberSubs[0]
+    if (!latest || latest.final_gpa >= gpaThreshold) return []
+    return [{ id: m.id, name: (m as any).full_name ?? 'Unknown', gpa: latest.final_gpa }]
+  }).sort((a, b) => a.gpa - b.gpa)
+
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData, gpaThreshold, atRiskMembers } } }
 }

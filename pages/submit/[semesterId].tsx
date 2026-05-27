@@ -11,6 +11,7 @@ interface Props {
   alreadySubmitted: boolean
   activeRound: SemesterRound | null
   memberCourses: MemberCourse[]
+  declinedReason: string | null
 }
 
 type Step = 'course_entry' | 'course_review' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'not_posted' | 'done'
@@ -31,7 +32,7 @@ interface OcrState {
   courseGrades: Record<string, string>
 }
 
-export default function SubmitPage({ semester, alreadySubmitted, activeRound, memberCourses: initialCourses }: Props) {
+export default function SubmitPage({ semester, alreadySubmitted, activeRound, memberCourses: initialCourses, declinedReason }: Props) {
   const router = useRouter()
   const submitLockRef = useRef(false)
 
@@ -274,6 +275,15 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   return (
     <Layout title={`Submit Grades — ${pageTitle}`}>
       <div className="max-w-2xl mx-auto">
+
+        {/* Declined banner */}
+        {declinedReason !== null && (
+          <div className="mb-4 px-4 py-3 rounded-lg border border-red-700 bg-red-900/20">
+            <p className="text-red-300 font-semibold text-sm">Your previous submission was declined</p>
+            {declinedReason && <p className="text-slate-400 text-sm mt-0.5">Reason: {declinedReason}</p>}
+            <p className="text-slate-400 text-sm mt-0.5">Please submit a correct screenshot of your grades below.</p>
+          </div>
+        )}
 
         {/* Header */}
         <div className="card mb-4 flex items-center justify-between">
@@ -568,15 +578,25 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .maybeSingle()
 
   // Check for existing submission (per-round if round exists, per-semester otherwise)
+  // Declined submissions don't block resubmission — only active/reviewed ones do
   let alreadySubmitted = false
+  let declinedReason: string | null = null
   if (activeRound) {
     const { data: existing } = await supabase
-      .from('submissions').select('id').eq('member_id', session!.user.id).eq('round_id', activeRound.id).maybeSingle()
-    alreadySubmitted = !!existing
+      .from('submissions').select('id,status,decline_reason').eq('member_id', session!.user.id).eq('round_id', activeRound.id).maybeSingle()
+    if (existing?.status === 'declined') {
+      declinedReason = existing.decline_reason ?? ''
+    } else {
+      alreadySubmitted = !!existing
+    }
   } else {
     const { data: existing } = await supabase
-      .from('submissions').select('id').eq('member_id', session!.user.id).eq('semester_id', semesterId).maybeSingle()
-    alreadySubmitted = !!existing
+      .from('submissions').select('id,status,decline_reason').eq('member_id', session!.user.id).eq('semester_id', semesterId).maybeSingle()
+    if (existing?.status === 'declined') {
+      declinedReason = existing.decline_reason ?? ''
+    } else {
+      alreadySubmitted = !!existing
+    }
   }
 
   // Load member's course list for this semester
@@ -587,5 +607,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .eq('semester_id', semesterId)
     .order('created_at', { ascending: true })
 
-  return { props: { semester, alreadySubmitted, activeRound: activeRound ?? null, memberCourses: memberCourses ?? [] } }
+  return { props: { semester, alreadySubmitted, activeRound: activeRound ?? null, memberCourses: memberCourses ?? [], declinedReason } }
 }

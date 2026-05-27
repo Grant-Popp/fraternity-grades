@@ -27,10 +27,11 @@ export type Submission = {
   ocr_gpa: number | null
   admin_gpa: number | null
   final_gpa: number | null
-  status: 'pending' | 'reviewed' | 'no_grade'
+  status: 'pending' | 'reviewed' | 'no_grade' | 'declined'
   photo_phash: string | null
   duplicate_flag: boolean
   admin_notes: string | null
+  decline_reason: string | null
   course_grades: Record<string, string> | null
   round_id: string | null
   submitted_at: string

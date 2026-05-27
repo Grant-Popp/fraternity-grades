@@ -19,10 +19,13 @@ interface Props {
   activeRounds: ActiveRoundEntry[]
   legacyActive: (Semester & { submission: Submission | null })[]
   past: (Semester & { submission: Submission | null })[]
+  isAtRisk: boolean
+  gpaThreshold: number
 }
 
 function StatusBadge({ submission }: { submission: Submission | null }) {
   if (!submission) return <span className="badge-pending">Not Submitted</span>
+  if (submission.status === 'declined') return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>
   if (submission.status === 'no_grade') return <span className="badge-no-grade">No Grade</span>
   if (submission.status === 'reviewed') return <span className="badge-reviewed">Reviewed ✓</span>
   return <span className="badge-pending">Pending Review</span>
@@ -43,7 +46,7 @@ function DeadlineCountdown({ deadline }: { deadline: string }) {
   return <span className="text-red-400 text-sm font-semibold">Due very soon!</span>
 }
 
-export default function Dashboard({ profile, activeRounds, legacyActive, past }: Props) {
+export default function Dashboard({ profile, activeRounds, legacyActive, past, isAtRisk, gpaThreshold }: Props) {
   const hasOpen = activeRounds.length > 0 || legacyActive.length > 0
 
   const latestGpa = (() => {
@@ -59,6 +62,15 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past }:
 
   return (
     <Layout title={`Welcome, ${profile.full_name.split(' ')[0]}`}>
+      {/* At-risk warning */}
+      {isAtRisk && (
+        <div className="mb-4 px-4 py-3 rounded-lg border border-red-700 bg-red-900/20">
+          <p className="text-red-300 font-semibold text-sm">Academic Standing Warning</p>
+          <p className="text-slate-400 text-sm mt-0.5">
+            Your current GPA is below the chapter minimum of {gpaThreshold.toFixed(2)}. Please contact your VP of Academics.
+          </p>
+        </div>
+      )}
       {/* Stats row */}
       <div className="mb-6 grid grid-cols-3 gap-3">
         <div className="card !p-4">
@@ -100,12 +112,12 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past }:
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={entry.submission} />
-                  {!entry.submission && new Date(entry.round.deadline) > new Date() && (
+                  {(!entry.submission || entry.submission.status === 'declined') && new Date(entry.round.deadline) > new Date() && (
                     <Link
                       href={`/submit/${entry.semesterId}`}
-                      className={`text-sm px-4 py-1.5 whitespace-nowrap ${entry.coursesEntered ? 'btn-primary' : 'btn-secondary'}`}
+                      className={`text-sm px-4 py-1.5 whitespace-nowrap ${entry.submission?.status === 'declined' ? 'btn-primary' : entry.coursesEntered ? 'btn-primary' : 'btn-secondary'}`}
                     >
-                      {entry.coursesEntered ? 'Submit Grades →' : 'Set up courses →'}
+                      {entry.submission?.status === 'declined' ? 'Resubmit →' : entry.coursesEntered ? 'Submit Grades →' : 'Set up courses →'}
                     </Link>
                   )}
                 </div>
@@ -126,9 +138,9 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past }:
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={s.submission} />
-                  {!s.submission && new Date(s.deadline) > new Date() && (
+                  {(!s.submission || s.submission.status === 'declined') && new Date(s.deadline) > new Date() && (
                     <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5 whitespace-nowrap">
-                      Submit Grades →
+                      {s.submission?.status === 'declined' ? 'Resubmit →' : 'Submit Grades →'}
                     </Link>
                   )}
                 </div>
@@ -243,5 +255,18 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       return { ...s, submission: sub }
     })
 
-  return { props: { profile, activeRounds, legacyActive, past } }
+  // At-risk check: compare latest reviewed GPA against chapter threshold
+  let isAtRisk = false
+  let gpaThreshold = 2.5
+  try {
+    const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
+    const { data: settings } = await (admin.from('chapter_settings' as any).select('gpa_threshold').maybeSingle())
+    gpaThreshold = (settings as any)?.gpa_threshold ?? 2.5
+    const latestReviewed = (submissions ?? [])
+      .filter((s: any) => s.final_gpa != null)
+      .sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0]
+    if (latestReviewed && latestReviewed.final_gpa < gpaThreshold) isAtRisk = true
+  } catch {}
+
+  return { props: { profile, activeRounds, legacyActive, past, isAtRisk, gpaThreshold } }
 }

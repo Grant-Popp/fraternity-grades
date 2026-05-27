@@ -171,7 +171,7 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
               <div className="flex items-center gap-2 mt-2">
                 <DatePicker
                   selected={editDeadline}
-                  onChange={date => setEditDeadline(date)}
+                  onChange={(date: Date | null) => setEditDeadline(date)}
                   showTimeSelect
                   timeIntervals={15}
                   injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}
@@ -318,7 +318,7 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
                 <label className="label text-xs">Deadline</label>
                 <DatePicker
                   selected={newRoundDeadline}
-                  onChange={date => setNewRoundDeadline(date)}
+                  onChange={(date: Date | null) => setNewRoundDeadline(date)}
                   showTimeSelect
                   timeIntervals={15}
                   dateFormat="MM/dd/yyyy h:mm aa"
@@ -377,7 +377,7 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
             <label className="label">Submission Deadline</label>
             <DatePicker
               selected={formDeadline}
-              onChange={date => setFormDeadline(date)}
+              onChange={(date: Date | null) => setFormDeadline(date)}
               showTimeSelect
               timeIntervals={15}
               injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}

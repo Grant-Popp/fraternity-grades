@@ -20,7 +20,7 @@ interface Props {
 }
 
 function StatusBadge({ s }: { s: EnrichedSubmission }) {
-  if (s.duplicate_flag) return <span className="badge-duplicate">⚠ Duplicate</span>
+  if (s.duplicate_flag) return <span className="badge-duplicate">⚠ Review</span>
   if (s.status === 'reviewed') return <span className="badge-reviewed">Reviewed</span>
   if (s.status === 'no_grade') return <span className="badge-no-grade">No Grade</span>
   return <span className="badge-pending">Pending</span>
@@ -271,7 +271,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                             <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-40">{s.ocr_raw_text ?? '—'}</pre>
                             {s.duplicate_flag && (
                               <p className="text-red-400 text-sm mt-3 bg-red-900/20 px-3 py-2 rounded-lg">
-                                ⚠️ <strong>Possible duplicate photo</strong> — this image is very similar to a previous submission from this member. Verify it shows current grades.
+                                ⚠️ <strong>Flagged for review</strong> — possible duplicate photo, similar image from another member, or member name not found in screenshot. Verify the photo is correct.
                               </p>
                             )}
                             {s.admin_notes && <p className="text-amber-300 text-sm mt-2">Note: {s.admin_notes}</p>}

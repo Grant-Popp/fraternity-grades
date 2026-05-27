@@ -85,10 +85,23 @@ function parseCourseGrades(text: string): Record<string, string> {
   return result
 }
 
+// Sanity check: does this text look like an academic grade report?
+function looksLikeGradeReport(text: string): boolean {
+  const lower = text.toLowerCase()
+  const keywords = ['grade', 'gpa', 'credit', 'course', 'points', 'blackboard', 'current', 'semester',
+    'enrolled', 'instructor', 'section', 'gradebook', 'cumulative', 'term', 'canvas', 'moodle']
+  if (keywords.some(kw => lower.includes(kw))) return true
+  // Course ID pattern (e.g. ENGR 110, CS 315)
+  if (/\b[A-Z]{2,4}\s{0,3}\d{3}\b/.test(text)) return true
+  // Academic percentage (e.g. 84.97%)
+  if (/\b\d{2,3}\.\d+\s*%/.test(text)) return true
+  return false
+}
+
 function parseOcrText(text: string): OcrResult {
   const courseGrades = parseCourseGrades(text)
 
-  // Pattern A: explicit "course grade" / "final grade" label nearby
+  // Pattern A: explicit "course grade" / "final grade" label nearby — always valid regardless of context
   const patternA = /(?:course\s+grade|final\s+grade|overall\s+grade|letter\s+grade)[\s\S]{0,100}([ABCDF][+-]?)/i
   const matchA = text.match(patternA)
   if (matchA) {
@@ -96,6 +109,11 @@ function parseOcrText(text: string): OcrResult {
     if (VALID_GRADES.has(grade)) {
       return { rawText: text, detectedGrade: grade, gpa: gradeToGpa(grade), confidence: 'high', allGrades: [grade], courseGrades }
     }
+  }
+
+  // Patterns B and C require the image to actually look like a grade report
+  if (!looksLikeGradeReport(text)) {
+    return { rawText: text, detectedGrade: null, gpa: null, confidence: 'none', allGrades: [], courseGrades }
   }
 
   // Pattern B: standalone letter grades (not part of a longer word)

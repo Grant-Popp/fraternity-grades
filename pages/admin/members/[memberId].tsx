@@ -2,6 +2,7 @@ import { GetServerSideProps } from 'next'
 import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import Link from 'next/link'
+import { useState } from 'react'
 import { gpaColorClass } from '@/lib/gpa'
 import type { Profile, Submission, Semester } from '@/lib/database.types'
 
@@ -16,11 +17,27 @@ interface Props {
   semesters: Semester[]
 }
 
-export default function MemberDetailPage({ member, submissions, semesters }: Props) {
+export default function MemberDetailPage({ member: initialMember, submissions, semesters }: Props) {
+  const [member, setMember] = useState(initialMember)
+  const [savingRole, setSavingRole] = useState(false)
+
   const reviewed = submissions.filter(s => s.final_gpa != null)
   const avgGpa = reviewed.length
     ? reviewed.reduce((a, b) => a + (b.final_gpa ?? 0), 0) / reviewed.length
     : null
+
+  const toggleRole = async () => {
+    const newRole = member.role === 'admin' ? 'member' : 'admin'
+    if (!window.confirm(newRole === 'admin' ? `Make ${member.full_name} an admin?` : `Remove admin access from ${member.full_name}?`)) return
+    setSavingRole(true)
+    const res = await fetch('/api/members/update-role', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: member.id, role: newRole }),
+    })
+    if (res.ok) setMember(prev => ({ ...prev, role: newRole }))
+    setSavingRole(false)
+  }
 
   return (
     <AdminLayout title={member.full_name}>
@@ -38,6 +55,9 @@ export default function MemberDetailPage({ member, submissions, semesters }: Pro
               <span className="text-slate-300"><span className="text-slate-500">Year:</span> {member.class_year ?? '—'}</span>
               <span className="text-slate-300"><span className="text-slate-500">Major:</span> {member.major ?? '—'}</span>
               <span className={`font-medium px-2 py-0.5 rounded text-xs ${member.role === 'admin' ? 'bg-amber-900 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>{member.role}</span>
+              <button onClick={toggleRole} disabled={savingRole} className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-50 ml-1">
+                {savingRole ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
+              </button>
             </div>
           </div>
           <div className="text-right">

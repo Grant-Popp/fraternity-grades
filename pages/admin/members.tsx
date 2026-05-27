@@ -11,32 +11,15 @@ interface MemberRow extends Profile {
 }
 
 export default function MembersPage({ members: initial }: { members: MemberRow[] }) {
-  const [members, setMembers] = useState(initial)
+  const [members] = useState(initial)
   const [search, setSearch] = useState('')
   const [filterYear, setFilterYear] = useState('all')
-  const [savingId, setSavingId] = useState<string | null>(null)
 
   const filtered = members.filter(m => {
     if (search && !m.full_name.toLowerCase().includes(search.toLowerCase()) && !m.email.toLowerCase().includes(search.toLowerCase())) return false
     if (filterYear !== 'all' && m.class_year !== filterYear) return false
     return true
   })
-
-  const toggleRole = async (m: MemberRow) => {
-    const newRole = m.role === 'admin' ? 'member' : 'admin'
-    const action = newRole === 'admin' ? `Make ${m.full_name} an admin?` : `Remove admin access from ${m.full_name}?`
-    if (!window.confirm(action)) return
-    setSavingId(m.id)
-    const res = await fetch('/api/members/update-role', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ memberId: m.id, role: newRole }),
-    })
-    if (res.ok) {
-      setMembers(prev => prev.map(p => p.id === m.id ? { ...p, role: newRole } : p))
-    }
-    setSavingId(null)
-  }
 
   return (
     <AdminLayout title="Members">
@@ -78,18 +61,9 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Link href={`/admin/members/${m.id}`} className="text-xs text-amber-400 hover:text-amber-300">
-                      View
-                    </Link>
-                    <button
-                      onClick={() => toggleRole(m)}
-                      disabled={savingId === m.id}
-                      className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-50"
-                    >
-                      {savingId === m.id ? '…' : m.role === 'admin' ? 'Remove admin' : 'Make admin'}
-                    </button>
-                  </div>
+                  <Link href={`/admin/members/${m.id}`} className="text-xs text-amber-400 hover:text-amber-300">
+                    View
+                  </Link>
                 </td>
               </tr>
             ))}

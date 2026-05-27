@@ -18,9 +18,12 @@ export default function LoginPage() {
     const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (loginError) { setError(loginError.message); setLoading(false); return }
 
-    // Set cookie so middleware and getServerSideProps can read the session
     if (data.session) {
-      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in ?? 3600}; SameSite=Lax`
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: data.session.access_token, expiresIn: data.session.expires_in }),
+      })
     }
 
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()

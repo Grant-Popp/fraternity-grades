@@ -9,7 +9,6 @@ interface EnrichedSubmission extends Submission {
   member_name: string
   member_class_year: string
   semester_name: string
-  photo_signed_url: string | null
 }
 
 interface Props {
@@ -31,6 +30,9 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
+    if (!grade && sub.ocr_gpa == null) {
+      if (!window.confirm('No grade is set and OCR found nothing. This will be marked reviewed with no GPA. Continue?')) return
+    }
     setSaving(true)
     const gpa = grade ? parseFloat(grade) : null
     await fetch('/api/submissions/update', {
@@ -79,6 +81,8 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterYear, setFilterYear] = useState('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+  const [loadingPhoto, setLoadingPhoto] = useState<string | null>(null)
 
   const filtered = subs.filter(s => {
     if (filterSem !== 'all' && s.semester_id !== filterSem) return false
@@ -86,6 +90,20 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
     if (filterYear !== 'all' && s.member_class_year !== filterYear) return false
     return true
   })
+
+  const handleViewPhoto = async (subId: string) => {
+    if (expandedId === subId) { setExpandedId(null); return }
+    setExpandedId(subId)
+    if (!signedUrls[subId]) {
+      setLoadingPhoto(subId)
+      const res = await fetch(`/api/submissions/photo-url?submissionId=${subId}`)
+      if (res.ok) {
+        const { url } = await res.json()
+        setSignedUrls(prev => ({ ...prev, [subId]: url }))
+      }
+      setLoadingPhoto(null)
+    }
+  }
 
   const handleSave = (id: string, gpa: number | null, notes: string) => {
     setSubs(prev => prev.map(s => s.id === id
@@ -148,20 +166,26 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
                     <td className="px-4 py-3">
                       {s.photo_url && (
                         <button
-                          onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                          onClick={() => handleViewPhoto(s.id)}
                           className="text-xs text-amber-400 hover:text-amber-300"
                         >
-                          {expandedId === s.id ? 'Hide' : 'View Photo'}
+                          {loadingPhoto === s.id ? '…' : expandedId === s.id ? 'Hide' : 'View Photo'}
                         </button>
                       )}
                     </td>
                   </tr>
-                  {expandedId === s.id && s.photo_signed_url && (
+                  {expandedId === s.id && s.photo_url && (
                     <tr key={`${s.id}-expand`} className="bg-slate-900/40">
                       <td colSpan={8} className="px-4 py-4">
                         <div className="flex gap-6">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={s.photo_signed_url} alt="Grade screenshot" className="max-h-80 rounded border border-slate-600 object-contain" />
+                          {signedUrls[s.id] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={signedUrls[s.id]} alt="Grade screenshot" className="max-h-80 rounded border border-slate-600 object-contain" />
+                          ) : (
+                            <div className="flex items-center justify-center w-40 h-32 bg-slate-800 rounded border border-slate-600 text-slate-400 text-sm">
+                              {loadingPhoto === s.id ? 'Loading…' : 'Could not load photo'}
+                            </div>
+                          )}
                           <div className="flex-1">
                             <p className="text-slate-400 text-xs mb-2">Raw OCR text:</p>
                             <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-40">{s.ocr_raw_text ?? '—'}</pre>
@@ -202,21 +226,13 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
   const { data: semesters } = await supabase.from('semesters').select('id,name').order('created_at', { ascending: false })
 
-  const submissions = await Promise.all((rawSubs ?? []).map(async (s: any) => {
-    let photo_signed_url: string | null = null
-    if (s.photo_url) {
-      const { data } = await supabaseAdmin.storage.from('grade-photos').createSignedUrl(s.photo_url, 3600)
-      photo_signed_url = data?.signedUrl ?? null
-    }
-    return {
-      ...s,
-      member_name: s.profiles?.full_name ?? 'Unknown',
-      member_class_year: s.profiles?.class_year ?? '—',
-      semester_name: s.semesters?.name ?? '—',
-      photo_signed_url,
-      profiles: undefined,
-      semesters: undefined,
-    }
+  const submissions: EnrichedSubmission[] = (rawSubs ?? []).map((s: any) => ({
+    ...s,
+    member_name: s.profiles?.full_name ?? 'Unknown',
+    member_class_year: s.profiles?.class_year ?? '—',
+    semester_name: s.semesters?.name ?? '—',
+    profiles: undefined,
+    semesters: undefined,
   }))
 
   return { props: { submissions, semesters: semesters ?? [] } }

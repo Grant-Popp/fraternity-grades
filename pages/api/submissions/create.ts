@@ -35,9 +35,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { semesterId } = body
     if (!semesterId) return res.status(400).json({ error: 'semesterId required' })
 
-    const { data: semester } = await supabaseAdmin.from('semesters').select('deadline').eq('id', semesterId).single()
+    const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name,required_years').eq('id', semesterId).single()
     if (!semester) return res.status(404).json({ error: 'Semester not found' })
     if (new Date(semester.deadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
+
+    if (semester.required_years?.length) {
+      const { data: mp } = await supabaseAdmin.from('profiles').select('class_year').eq('id', user.id).maybeSingle()
+      if (!mp || !semester.required_years.includes(mp.class_year)) {
+        return res.status(403).json({ error: 'You are not required to submit for this semester.' })
+      }
+    }
 
     const { error } = await supabaseAdmin.from('submissions').insert({
       member_id: user.id,
@@ -60,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // Multipart path: photo submission
-  const form = formidable({ maxFileSize: 20 * 1024 * 1024 })
+  const form = formidable({ maxFileSize: 5 * 1024 * 1024 })
   const [fields, files] = await form.parse(req)
 
   const semesterId = Array.isArray(fields.semesterId) ? fields.semesterId[0] : fields.semesterId
@@ -75,9 +82,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Only image files are allowed (JPG, PNG, WebP, GIF)' })
   }
 
-  const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name').eq('id', semesterId).single()
+  const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name,required_years').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
   if (new Date(semester.deadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
+
+  if (semester.required_years?.length) {
+    const { data: mp } = await supabaseAdmin.from('profiles').select('class_year').eq('id', user.id).maybeSingle()
+    if (!mp || !semester.required_years.includes(mp.class_year)) {
+      return res.status(403).json({ error: 'You are not required to submit for this semester.' })
+    }
+  }
 
   const { data: existing } = await supabaseAdmin.from('submissions')
     .select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()

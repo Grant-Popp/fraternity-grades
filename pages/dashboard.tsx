@@ -90,9 +90,10 @@ export default function Dashboard({ profile, semesters }: Props) {
 
       {active.length === 0 && (
         <div className="card text-center py-12 mb-8">
-          <p className="text-4xl mb-3">🎉</p>
+          <p className="text-4xl mb-3">📭</p>
           <p className="text-white font-semibold text-lg">No open submissions</p>
-          <p className="text-slate-400 text-sm mt-1">Check back when the VP of Academics opens a new semester.</p>
+          <p className="text-slate-400 text-sm mt-1">The VP of Academics hasn&apos;t opened a new semester yet.</p>
+          <p className="text-slate-500 text-xs mt-3">Questions? Contact your chapter&apos;s VP of Academics directly.</p>
         </div>
       )}
 

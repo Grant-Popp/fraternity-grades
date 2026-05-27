@@ -2,7 +2,7 @@ import { GetServerSideProps } from 'next'
 import { requireAuth } from '@/lib/auth'
 import type { Semester } from '@/lib/database.types'
 import Layout from '@/components/layout/Layout'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/router'
 import { GRADE_MAP } from '@/lib/gpa'
 
@@ -11,7 +11,7 @@ interface Props {
   alreadySubmitted: boolean
 }
 
-type Step = 'choose' | 'upload' | 'ocr' | 'confirm' | 'no_grade' | 'done'
+type Step = 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'done'
 
 interface OcrState {
   rawText: string
@@ -23,7 +23,7 @@ interface OcrState {
 
 export default function SubmitPage({ semester, alreadySubmitted }: Props) {
   const router = useRouter()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const submitLockRef = useRef(false)
 
   const [step, setStep] = useState<Step>('choose')
   const [file, setFile] = useState<File | null>(null)
@@ -74,7 +74,8 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
   }
 
   const handleSubmitPhoto = async () => {
-    if (!file) return
+    if (!file || submitLockRef.current) return
+    submitLockRef.current = true
     setSubmitting(true)
     setError('')
 
@@ -83,21 +84,24 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', ocrState?.rawText ?? '')
     formData.append('ocrGrade', selectedGrade)
-    formData.append('noGrade', 'false')
 
     const res = await fetch('/api/submissions/create', { method: 'POST', body: formData })
     const data = await res.json()
 
     if (!res.ok) {
       setError(data.error ?? 'Submission failed.')
+      submitLockRef.current = false
       setSubmitting(false)
       return
     }
     setStep('done')
+    submitLockRef.current = false
     setSubmitting(false)
   }
 
   const handleNoGrade = async () => {
+    if (submitLockRef.current) return
+    submitLockRef.current = true
     setSubmitting(true)
     setError('')
 
@@ -107,8 +111,14 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
       body: JSON.stringify({ semesterId: semester.id, noGrade: true }),
     })
     const data = await res.json()
-    if (!res.ok) { setError(data.error ?? 'Submission failed.'); setSubmitting(false); return }
+    if (!res.ok) {
+      setError(data.error ?? 'Submission failed.')
+      submitLockRef.current = false
+      setSubmitting(false)
+      return
+    }
     setStep('done')
+    submitLockRef.current = false
     setSubmitting(false)
   }
 
@@ -172,17 +182,20 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
           </div>
         </div>
 
+        {/* Hidden file input — label association opens picker natively on iOS without programmatic click */}
+        <input id="grade-photo" type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleFileChange} />
+
         {/* Choose path */}
         {step === 'choose' && (
           <div className="grid md:grid-cols-2 gap-4">
-            <button
-              onClick={() => { setStep('upload'); setTimeout(() => fileRef.current?.click(), 100) }}
-              className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer"
+            <label
+              htmlFor="grade-photo"
+              className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer block"
             >
               <p className="text-3xl mb-3">📷</p>
               <p className="font-bold text-white text-lg">Upload Blackboard Screenshot</p>
-              <p className="text-slate-400 text-sm mt-1">Take a screenshot of your Blackboard grades page and upload it. We&apos;ll read your grade automatically.</p>
-            </button>
+              <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
+            </label>
 
             <button
               onClick={() => setStep('no_grade')}
@@ -192,19 +205,6 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
               <p className="font-bold text-white text-lg">No Grade This Semester</p>
               <p className="text-slate-400 text-sm mt-1">Select this if you are not enrolled or taking classes this semester.</p>
             </button>
-          </div>
-        )}
-
-        {/* Hidden file input */}
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-
-        {/* Upload trigger */}
-        {step === 'upload' && (
-          <div className="card text-center py-12 border-2 border-dashed border-slate-600 cursor-pointer"
-            onClick={() => fileRef.current?.click()}>
-            <p className="text-4xl mb-3">📤</p>
-            <p className="text-white font-semibold">Click to select your screenshot</p>
-            <p className="text-slate-400 text-sm mt-1">Supported: JPG, PNG, GIF, WebP</p>
           </div>
         )}
 

@@ -22,6 +22,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    await fetch('/api/auth/session', { method: 'DELETE' })
     router.push('/auth/login')
   }
 

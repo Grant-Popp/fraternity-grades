@@ -62,6 +62,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   }
 
   const toggleActive = async (s: Semester) => {
+    if (s.is_active && !window.confirm(`Deactivate "${s.name}"?\n\nMembers will immediately lose the ability to submit grades. You can reactivate at any time.`)) return
     const res = await fetch('/api/semesters/update', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -143,6 +144,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
                   dateFormat="MM/dd/yyyy h:mm aa"
                   placeholderText="Pick new deadline"
                   className="input"
+                  withPortal
                 />
                 <button onClick={() => updateDeadline(s.id)} disabled={saving || !editDeadline} className="btn-primary text-xs py-1.5">
                   {saving ? '…' : 'Save'}
@@ -166,10 +168,12 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
             </button>
             {!s.is_active && (
               archiveConfirm === s.id ? (
-                <div className="flex gap-2 items-center">
-                  <span className="text-xs text-red-400">Delete all photos?</span>
-                  <button onClick={() => archiveSemester(s.id)} className="btn-danger text-xs py-1 px-2">Yes, archive</button>
-                  <button onClick={() => setArchiveConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
+                <div className="flex flex-col gap-1.5 items-end">
+                  <span className="text-xs text-red-400 text-right">Permanently delete all photos? Grade records are kept but files cannot be recovered.</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => archiveSemester(s.id)} className="btn-danger text-xs py-1 px-2">Yes, delete permanently</button>
+                    <button onClick={() => setArchiveConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
+                  </div>
                 </div>
               ) : (
                 <button onClick={() => setArchiveConfirm(s.id)} className="text-xs text-slate-400 hover:text-red-400 transition-colors">
@@ -270,6 +274,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
               placeholderText="Click to pick date & time"
               className="input w-full"
               minDate={new Date()}
+              withPortal
             />
           </div>
           <div className="w-full">

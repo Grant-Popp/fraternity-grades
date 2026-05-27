@@ -155,17 +155,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
   // Compute perceptual hash for duplicate detection
+  // Checks both: same member re-using an old photo, AND two members submitting identical photos
   let photo_phash: string | null = null
   let duplicate_flag = false
   try {
     photo_phash = await computePhash(fileBuffer)
-    const { data: prevSubs } = await supabaseAdmin
+    const hashQuery = supabaseAdmin
+      .from('submissions')
+      .select('photo_phash')
+      .not('photo_phash', 'is', null)
+    // Scope to this round or semester so we only compare within the same submission window
+    const scoped = roundId
+      ? hashQuery.eq('round_id', roundId)
+      : hashQuery.eq('semester_id', semesterId)
+    const { data: scopedSubs } = await scoped
+    // Also check this member's own history across all semesters
+    const { data: ownSubs } = await supabaseAdmin
       .from('submissions')
       .select('photo_phash')
       .eq('member_id', user.id)
       .not('photo_phash', 'is', null)
-    const existingHashes = (prevSubs ?? []).map((s: any) => s.photo_phash).filter(Boolean) as string[]
-    duplicate_flag = isDuplicate(photo_phash, existingHashes)
+    const allHashes = [
+      ...(scopedSubs ?? []).map((s: any) => s.photo_phash),
+      ...(ownSubs ?? []).map((s: any) => s.photo_phash),
+    ].filter(Boolean) as string[]
+    duplicate_flag = isDuplicate(photo_phash, allHashes)
   } catch {}
 
   const ocrGpa = ocrGrade ? gradeToGpa(ocrGrade) : null

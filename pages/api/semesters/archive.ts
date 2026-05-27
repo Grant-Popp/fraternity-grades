@@ -47,6 +47,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .update({ photo_url: null, photo_phash: null })
     .eq('semester_id', semesterId)
 
+  // Remove member course lists for this semester
+  await supabaseAdmin.from('member_courses').delete().eq('semester_id', semesterId)
+
   // Deactivate the semester
   await supabaseAdmin.from('semesters').update({ is_active: false }).eq('id', semesterId)
 

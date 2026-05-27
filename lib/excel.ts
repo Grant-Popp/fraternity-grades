@@ -1,6 +1,121 @@
 import ExcelJS from 'exceljs'
 import type { Profile, Submission, Semester } from './database.types'
 
+export async function generateAllSemestersExcel(
+  members: Profile[],
+  allSubmissions: Submission[],
+  semesters: Semester[]
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Chapter Grade Portal'
+  workbook.created = new Date()
+
+  const semsSorted = [...semesters].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  const membersSorted = [...members].sort((a, b) => a.full_name.localeCompare(b.full_name))
+
+  // ── GPA History pivot ──────────────────────────────────────
+  {
+    const ws = workbook.addWorksheet('GPA History')
+    const cols: Partial<ExcelJS.Column>[] = [{ key: 'name', width: 24 }, { key: 'year', width: 14 }]
+    semsSorted.forEach(s => cols.push({ key: s.id, width: 14 }))
+    cols.push({ key: 'avg', width: 12 })
+    ws.columns = cols
+
+    // Header
+    const hdr = ws.getRow(1)
+    hdr.getCell(1).value = 'Member'
+    hdr.getCell(2).value = 'Year'
+    semsSorted.forEach((s, i) => { hdr.getCell(3 + i).value = s.name })
+    hdr.getCell(3 + semsSorted.length).value = 'Overall Avg'
+    hdr.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: WHITE } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    })
+    ws.getRow(1).height = 24
+
+    membersSorted.forEach((m, mi) => {
+      const row = ws.getRow(2 + mi)
+      row.getCell(1).value = m.full_name
+      row.getCell(2).value = m.class_year
+      row.getCell(2).alignment = { horizontal: 'center' }
+      const gpas: number[] = []
+      semsSorted.forEach((s, si) => {
+        const sub = allSubmissions.find(x => x.member_id === m.id && x.semester_id === s.id)
+        const gpa = sub?.final_gpa ?? null
+        const cell = row.getCell(3 + si)
+        cell.value = gpa !== null ? +gpa.toFixed(2) : sub ? 'N/A' : '—'
+        cell.alignment = { horizontal: 'center' }
+        if (gpa !== null) {
+          cell.fill = gpaFill(gpa)!
+          cell.font = { bold: true, color: { argb: gpaFontColor(gpa) } }
+          gpas.push(gpa)
+        }
+      })
+      const avg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
+      const avgCell = row.getCell(3 + semsSorted.length)
+      avgCell.value = avg !== null ? +avg.toFixed(2) : '—'
+      avgCell.alignment = { horizontal: 'center' }
+      if (avg !== null) {
+        avgCell.fill = gpaFill(avg)!
+        avgCell.font = { bold: true, color: { argb: gpaFontColor(avg) } }
+      }
+      if (mi % 2 === 0) {
+        [1, 2].forEach(c => {
+          if (!row.getCell(c).fill || (row.getCell(c).fill as any).fgColor?.argb === undefined) {
+            row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+          }
+        })
+      }
+    })
+    ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 1 }]
+  }
+
+  // ── One summary sheet per semester ────────────────────────
+  for (const sem of semsSorted) {
+    const subs = allSubmissions.filter(s => s.semester_id === sem.id)
+    const subByMember = new Map<string, Submission>()
+    subs.forEach(s => subByMember.set(s.member_id, s))
+
+    const sheetName = sem.name.substring(0, 28).replace(/[*?:/\\[\]]/g, '')
+    const ws = workbook.addWorksheet(sheetName)
+    ws.columns = [
+      { key: 'name', width: 24 }, { key: 'year', width: 14 },
+      { key: 'gpa', width: 10 }, { key: 'status', width: 14 },
+    ]
+
+    ws.mergeCells('A1:D1')
+    const title = ws.getCell('A1')
+    title.value = sem.name
+    title.font = { bold: true, size: 13, color: { argb: DARK_NAVY } }
+    title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD } }
+    title.alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getRow(1).height = 26
+
+    headerRow(ws, ['Name', 'Year', 'GPA', 'Status'], 2)
+
+    membersSorted.forEach((m, i) => {
+      const sub = subByMember.get(m.id)
+      const gpa = sub?.final_gpa ?? null
+      const row = ws.getRow(3 + i)
+      row.getCell(1).value = m.full_name
+      row.getCell(2).value = m.class_year
+      row.getCell(3).value = gpa !== null ? +gpa.toFixed(2) : '—'
+      row.getCell(4).value = sub?.status ?? 'Not Submitted'
+      row.getCell(2).alignment = { horizontal: 'center' }
+      row.getCell(3).alignment = { horizontal: 'center' }
+      row.getCell(4).alignment = { horizontal: 'center' }
+      if (gpa !== null) {
+        row.getCell(3).fill = gpaFill(gpa)!
+        row.getCell(3).font = { bold: true, color: { argb: gpaFontColor(gpa) } }
+      }
+    })
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer()
+  return Buffer.from(buffer)
+}
+
 const GOLD = 'FFFFF59E0B' // actually ARGB: FF + hex color
 const DARK_NAVY = 'FF0F172A'
 const WHITE = 'FFFFFFFF'

@@ -182,6 +182,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     duplicate_flag = isDuplicate(photo_phash, allHashes)
   } catch {}
 
+  // Name cross-reference: member's last name should appear in OCR text
+  // Flags if the screenshot appears to belong to a different person
+  const { data: memberProfile } = await supabaseAdmin.from('profiles').select('full_name,email').eq('id', user.id).single()
+  if (!duplicate_flag && memberProfile?.full_name && ocrRawText) {
+    const parts = memberProfile.full_name.trim().toLowerCase().split(/\s+/)
+    const lastName = parts[parts.length - 1]
+    if (lastName.length > 2 && !ocrRawText.toLowerCase().includes(lastName)) {
+      duplicate_flag = true
+    }
+  }
+
   const ocrGpa = ocrGrade ? gradeToGpa(ocrGrade) : null
 
   const { error: insertError } = await supabaseAdmin.from('submissions').insert({
@@ -206,10 +217,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { data: profile } = await supabaseAdmin.from('profiles').select('full_name,email').eq('id', user.id).single()
-    if (profile) {
+    if (memberProfile) {
       const { sendEmail } = await import('@/lib/email')
-      await sendEmail({ to: profile.email, memberName: profile.full_name, semesterName: semester.name, type: 'confirmation' })
+      await sendEmail({ to: memberProfile.email, memberName: memberProfile.full_name, semesterName: semester.name, type: 'confirmation' })
     }
   } catch {}
 

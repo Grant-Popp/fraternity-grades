@@ -9,23 +9,17 @@ export default function ExportPage({ semesters }: { semesters: Semester[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleExport = async () => {
-    if (!selectedSem) return
+  const handleExport = async (semId: string, filename: string) => {
     setLoading(true)
     setError('')
-
-    const res = await fetch(`/api/export/excel?semesterId=${selectedSem}`)
+    const res = await fetch(`/api/export/excel?semesterId=${semId}`)
     if (!res.ok) {
       const data = await res.json()
       setError(data.error ?? 'Export failed.')
       setLoading(false)
       return
     }
-
     const blob = await res.blob()
-    const sem = semesters.find(s => s.id === selectedSem)
-    const filename = `grades-${sem?.name.replace(/\s+/g, '-').toLowerCase() ?? 'export'}.xlsx`
-
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -53,13 +47,28 @@ export default function ExportPage({ semesters }: { semesters: Semester[] }) {
 
           {error && <p className="text-red-400 text-sm bg-red-900/20 px-3 py-2 rounded-lg mb-4">{error}</p>}
 
-          <button onClick={handleExport} disabled={loading || !selectedSem} className="btn-primary w-full py-3">
+          <button
+            onClick={() => {
+              const sem = semesters.find(s => s.id === selectedSem)
+              handleExport(selectedSem, `grades-${sem?.name.replace(/\s+/g, '-').toLowerCase() ?? 'export'}.xlsx`)
+            }}
+            disabled={loading || !selectedSem}
+            className="btn-primary w-full py-3 mb-3"
+          >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
                 Generating Excel…
               </span>
-            ) : '📥 Download Excel Report'}
+            ) : '📥 Download This Semester'}
+          </button>
+
+          <button
+            onClick={() => handleExport('all', 'all-semesters-grades.xlsx')}
+            disabled={loading}
+            className="btn-secondary w-full py-3"
+          >
+            {loading ? 'Generating…' : '📊 Download All Semesters (GPA History)'}
           </button>
         </div>
 

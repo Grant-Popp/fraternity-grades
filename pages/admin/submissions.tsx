@@ -32,6 +32,18 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
   const [notes, setNotes] = useState(sub.admin_notes ?? '')
   const [saving, setSaving] = useState(false)
 
+  const approve = async () => {
+    setSaving(true)
+    const gpa = sub.ocr_gpa
+    await fetch('/api/submissions/update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionId: sub.id, adminGpa: gpa, status: 'reviewed', adminNotes: '' }),
+    })
+    onSave(sub.id, gpa, '')
+    setSaving(false)
+  }
+
   const save = async () => {
     if (!grade && sub.ocr_gpa == null) {
       if (!window.confirm('No grade is set and OCR found nothing. This will be marked reviewed with no GPA. Continue?')) return
@@ -50,11 +62,23 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className={`font-semibold ${sub.final_gpa != null ? gpaColorClass(sub.final_gpa) : 'text-slate-400'}`}>
           {sub.final_gpa?.toFixed(2) ?? '—'}
         </span>
-        {sub.status !== 'no_grade' && (
+        {sub.status === 'pending' && !sub.no_grade && (
+          <>
+            <button
+              onClick={approve}
+              disabled={saving}
+              className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors"
+            >
+              {saving ? '…' : '✓ Approve'}
+            </button>
+            <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+          </>
+        )}
+        {sub.status === 'reviewed' && (
           <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
         )}
       </div>

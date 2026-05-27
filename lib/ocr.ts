@@ -116,7 +116,7 @@ function parseOcrText(text: string): OcrResult {
     const pct = parseFloat(pctMatches[pctMatches.length - 1][1])
     if (pct >= 0 && pct <= 100) {
       const grade = percentageToGrade(pct)
-      return { rawText: text, detectedGrade: grade, gpa: gradeToGpa(grade), confidence: 'low', allGrades: [grade], courseGrades }
+      return { rawText: text, detectedGrade: grade, gpa: gradeToGpa(grade), confidence: 'medium', allGrades: [grade], courseGrades }
     }
   }
 

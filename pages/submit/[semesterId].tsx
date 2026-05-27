@@ -66,6 +66,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrState, setOcrState] = useState<OcrState | null>(null)
   const [selectedGrade, setSelectedGrade] = useState<string>('')
+  const [lowQualityFlag, setLowQualityFlag] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -157,8 +158,10 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       const result = await runOcr(f)
       setOcrState(result)
       setSelectedGrade(result.detectedGrade ?? '')
+      setLowQualityFlag(false)
     } catch {
       setOcrFailed(true)
+      setLowQualityFlag(true)
       setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [], courseGrades: {} })
     } finally {
       setOcrLoading(false)
@@ -175,7 +178,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     formData.append('file', file)
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', ocrState?.rawText ?? '')
-    formData.append('ocrGrade', selectedGrade)
+    formData.append('ocrGrade', lowQualityFlag ? '' : selectedGrade)
     formData.append('courseGrades', JSON.stringify(ocrState?.courseGrades ?? {}))
     if (activeRound) formData.append('roundId', activeRound.id)
     const res = await fetch('/api/submissions/create', { method: 'POST', body: formData })
@@ -421,8 +424,8 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
               className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
             >
               <p className="text-3xl mb-3">🚫</p>
-              <p className="font-bold text-white text-lg">No Grade This Semester</p>
-              <p className="text-slate-400 text-sm mt-1">Select this if you are not enrolled or not taking graded classes.</p>
+              <p className="font-bold text-white text-lg">No Grades Yet</p>
+              <p className="text-slate-400 text-sm mt-1">No grades to report for this round. This will be recorded by the VP of Academics.</p>
             </button>
           </div>
         )}
@@ -453,18 +456,29 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                   {confidenceLabel[ocrState.confidence]}
                 </span>
               </div>
-              <div>
-                <label className="label">Detected Grade (verify or correct)</label>
-                <select className="input" value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)}>
-                  <option value="">— Select grade —</option>
-                  {Object.keys(GRADE_MAP).map(g => (
-                    <option key={g} value={g}>{g} ({GRADE_MAP[g].toFixed(1)} GPA pts)</option>
-                  ))}
-                </select>
-                {ocrState.allGrades.length > 1 && (
-                  <p className="text-xs text-slate-400 mt-1">All detected grades: {ocrState.allGrades.join(', ')}</p>
+                <div>
+                <label className="label">Detected Grade</label>
+                {lowQualityFlag ? (
+                  <p className="text-amber-400 text-sm bg-amber-900/20 px-3 py-2 rounded-lg">
+                    ⚠️ Flagged as unclear — the VP of Academics will review your photo manually.
+                  </p>
+                ) : selectedGrade ? (
+                  <p className="text-2xl font-bold text-white mt-1">{selectedGrade} <span className="text-slate-400 text-base font-normal">({GRADE_MAP[selectedGrade]?.toFixed(1)} GPA pts)</span></p>
+                ) : (
+                  <p className="text-slate-400 text-sm mt-1">No grade detected — the VP of Academics will review your photo.</p>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => setLowQualityFlag(f => !f)}
+                className={`mt-3 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  lowQualityFlag
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                    : 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {lowQualityFlag ? '✓ Flagged as unclear' : 'Photo is hard to read'}
+              </button>
               {Object.keys(ocrState.courseGrades).length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-700">
                   <p className="text-slate-400 text-xs mb-2">Detected course grades — verify these look correct:</p>
@@ -489,7 +503,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
             <div className="flex gap-3">
               <button onClick={() => setStep('choose')} className="btn-secondary flex-1">← Back</button>
-              <button onClick={handleSubmitPhoto} className="btn-primary flex-1" disabled={!selectedGrade || submitting}>
+              <button onClick={handleSubmitPhoto} className="btn-primary flex-1" disabled={submitting}>
                 {submitting ? 'Submitting…' : 'Submit Grade'}
               </button>
             </div>
@@ -514,10 +528,10 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
         {step === 'no_grade' && (
           <div className="card text-center py-10">
             <p className="text-4xl mb-4">🚫</p>
-            <h3 className="text-white font-semibold text-lg mb-2">Confirm: No Grade This Semester</h3>
+            <h3 className="text-white font-semibold text-lg mb-2">Confirm: No Grades Yet</h3>
             <p className="text-slate-400 text-sm mb-6">
-              You are indicating that you have no grades to report for <strong className="text-white">{semester.name}</strong>.
-              This will be recorded and reviewed by the VP of Academics.
+              You are indicating that you have no grades to report for <strong className="text-white">{pageTitle}</strong>.
+              The VP of Academics will be notified.
             </p>
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg mb-4">{error}</p>}
             <div className="flex gap-3 justify-center">

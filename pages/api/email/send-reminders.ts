@@ -12,12 +12,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
 
-  const { semesterId, type }: { semesterId: string; type: EmailType } = req.body
+  const { semesterId, type, classYears }: { semesterId: string; type: EmailType; classYears?: string[] } = req.body
 
   const { data: semester } = await supabaseAdmin.from('semesters').select('name,deadline').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
 
-  const { data: members } = await supabaseAdmin.from('profiles').select('id,full_name,email').eq('role', 'member')
+  let query = supabaseAdmin.from('profiles').select('id,full_name,email').eq('role', 'member')
+  if (classYears && classYears.length > 0) query = query.in('class_year', classYears)
+  const { data: members } = await query
   const { data: submitted } = await supabaseAdmin.from('submissions').select('member_id').eq('semester_id', semesterId)
   const submittedIds = new Set((submitted ?? []).map((s: any) => s.member_id))
   const targets = (members ?? []).filter(m => !submittedIds.has(m.id))

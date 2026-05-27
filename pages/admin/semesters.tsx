@@ -6,6 +6,8 @@ import type { Semester } from '@/lib/database.types'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 
+const ALL_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior']
+
 export default function SemestersPage({ semesters: initial }: { semesters: Semester[] }) {
   const [semesters, setSemesters] = useState(initial)
   const [formName, setFormName] = useState('')
@@ -18,6 +20,11 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   const [emailStatus, setEmailStatus] = useState<Record<string, string>>({})
   const [archiveStatus, setArchiveStatus] = useState<Record<string, string>>({})
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
+  const [reminderYears, setReminderYears] = useState<Record<string, string[]>>({})
+  const [showHistory, setShowHistory] = useState(false)
+
+  const active = semesters.filter(s => s.is_active)
+  const history = semesters.filter(s => !s.is_active)
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,18 +87,140 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     }
   }
 
+  const toggleYear = (semesterId: string, year: string) => {
+    setReminderYears(prev => {
+      const current = prev[semesterId] ?? ALL_YEARS
+      const next = current.includes(year) ? current.filter(y => y !== year) : [...current, year]
+      return { ...prev, [semesterId]: next }
+    })
+  }
+
   const sendReminders = async (semesterId: string, type: 'reminder' | 'deadline_warning') => {
+    const years = reminderYears[semesterId] ?? ALL_YEARS
     setEmailStatus(prev => ({ ...prev, [semesterId + type]: 'Sending…' }))
     const res = await fetch('/api/email/send-reminders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ semesterId, type }),
+      body: JSON.stringify({ semesterId, type, classYears: years }),
     })
     const data = await res.json()
     setEmailStatus(prev => ({
       ...prev,
       [semesterId + type]: res.ok ? `✓ Sent ${data.sent}, skipped ${data.skipped}` : `Error: ${data.error}`,
     }))
+  }
+
+  const SemesterCard = ({ s }: { s: Semester }) => {
+    const isPast = new Date(s.deadline) < new Date()
+    const years = reminderYears[s.id] ?? ALL_YEARS
+
+    return (
+      <div className={`card ${s.is_active ? 'border-amber-500/40' : 'border-slate-700'}`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="font-semibold text-white">{s.name}</p>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${s.is_active ? 'bg-green-900 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
+                {s.is_active ? 'Active' : 'Inactive'}
+              </span>
+              {isPast && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">Deadline Passed</span>}
+            </div>
+
+            {editId === s.id ? (
+              <div className="flex items-center gap-2 mt-2">
+                <DatePicker
+                  selected={editDeadline}
+                  onChange={date => setEditDeadline(date)}
+                  showTimeSelect
+                  timeIntervals={15}
+                  injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}
+                  dateFormat="MM/dd/yyyy h:mm aa"
+                  placeholderText="Pick new deadline"
+                  className="input"
+                />
+                <button onClick={() => updateDeadline(s.id)} disabled={saving || !editDeadline} className="btn-primary text-xs py-1.5">
+                  {saving ? '…' : 'Save'}
+                </button>
+                <button onClick={() => setEditId(null)} className="btn-secondary text-xs py-1.5">Cancel</button>
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm">
+                Deadline: {new Date(s.deadline).toLocaleString()}
+                {s.is_active && (
+                  <button onClick={() => { setEditId(s.id); setEditDeadline(new Date(s.deadline)) }}
+                    className="ml-2 text-amber-400 hover:text-amber-300 text-xs">Edit</button>
+                )}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 items-end shrink-0">
+            <button onClick={() => toggleActive(s)} className="btn-secondary text-xs py-1 px-3">
+              {s.is_active ? 'Deactivate' : 'Activate'}
+            </button>
+            {!s.is_active && (
+              archiveConfirm === s.id ? (
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs text-red-400">Delete all photos?</span>
+                  <button onClick={() => archiveSemester(s.id)} className="btn-danger text-xs py-1 px-2">Yes, archive</button>
+                  <button onClick={() => setArchiveConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
+                </div>
+              ) : (
+                <button onClick={() => setArchiveConfirm(s.id)} className="text-xs text-slate-400 hover:text-red-400 transition-colors">
+                  🗑 Archive photos
+                </button>
+              )
+            )}
+            {archiveStatus[s.id] && (
+              <span className="text-xs text-green-400">{archiveStatus[s.id]}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Email reminder section */}
+        {s.is_active && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            {/* Class year filter */}
+            <div className="flex flex-wrap gap-2 items-center mb-3">
+              <span className="text-slate-400 text-xs">Target:</span>
+              {ALL_YEARS.map(yr => (
+                <button
+                  key={yr}
+                  onClick={() => toggleYear(s.id, yr)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    years.includes(yr)
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                      : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
+                  }`}
+                >
+                  {yr}
+                </button>
+              ))}
+              {years.length !== ALL_YEARS.length && (
+                <button onClick={() => setReminderYears(prev => ({ ...prev, [s.id]: ALL_YEARS }))}
+                  className="text-xs text-slate-500 hover:text-slate-300">All</button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <p className="text-slate-400 text-sm">Send reminders to non-submitters:</p>
+              <button onClick={() => sendReminders(s.id, 'reminder')} className="btn-secondary text-xs py-1.5 px-3">
+                📧 Send Reminder
+              </button>
+              <button onClick={() => sendReminders(s.id, 'deadline_warning')} className="btn-secondary text-xs py-1.5 px-3">
+                ⚠️ Send Deadline Warning
+              </button>
+              {emailStatus[s.id + 'reminder'] && (
+                <span className="text-green-400 text-xs">{emailStatus[s.id + 'reminder']}</span>
+              )}
+              {emailStatus[s.id + 'deadline_warning'] && (
+                <span className="text-amber-400 text-xs">{emailStatus[s.id + 'deadline_warning']}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -144,99 +273,34 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
       </div>
 
-      {/* Semester list */}
-      <div className="space-y-3">
-        {semesters.map(s => {
-          const isPast = new Date(s.deadline) < new Date()
-          return (
-            <div key={s.id} className={`card ${s.is_active ? 'border-amber-500/40' : 'opacity-70'}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-semibold text-white">{s.name}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${s.is_active ? 'bg-green-900 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                      {s.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                    {isPast && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900 text-red-300">Deadline Passed</span>}
-                  </div>
-
-                  {editId === s.id ? (
-                    <div className="flex items-center gap-2 mt-2">
-                      <DatePicker
-                        selected={editDeadline}
-                        onChange={date => setEditDeadline(date)}
-                        showTimeSelect
-                        timeIntervals={15}
-                        injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}
-                        dateFormat="MM/dd/yyyy h:mm aa"
-                        placeholderText="Pick new deadline"
-                        className="input"
-                      />
-                      <button onClick={() => updateDeadline(s.id)} disabled={saving || !editDeadline} className="btn-primary text-xs py-1.5">
-                        {saving ? '…' : 'Save'}
-                      </button>
-                      <button onClick={() => setEditId(null)} className="btn-secondary text-xs py-1.5">Cancel</button>
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-sm">
-                      Deadline: {new Date(s.deadline).toLocaleString()}
-                      <button onClick={() => { setEditId(s.id); setEditDeadline(new Date(s.deadline)) }}
-                        className="ml-2 text-amber-400 hover:text-amber-300 text-xs">Edit</button>
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2 items-end shrink-0">
-                  <button onClick={() => toggleActive(s)} className="btn-secondary text-xs py-1 px-3">
-                    {s.is_active ? 'Deactivate' : 'Activate'}
-                  </button>
-                  {!s.is_active && (
-                    archiveConfirm === s.id ? (
-                      <div className="flex gap-2 items-center">
-                        <span className="text-xs text-red-400">Delete all photos?</span>
-                        <button onClick={() => archiveSemester(s.id)} className="btn-danger text-xs py-1 px-2">Yes, archive</button>
-                        <button onClick={() => setArchiveConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setArchiveConfirm(s.id)} className="text-xs text-slate-400 hover:text-red-400 transition-colors">
-                        🗑 Archive photos
-                      </button>
-                    )
-                  )}
-                  {archiveStatus[s.id] && (
-                    <span className="text-xs text-green-400">{archiveStatus[s.id]}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Email reminder buttons */}
-              {s.is_active && (
-                <div className="mt-4 pt-4 border-t border-slate-700 flex flex-wrap gap-3 items-center">
-                  <p className="text-slate-400 text-sm">Send email reminders to non-submitters:</p>
-                  <button onClick={() => sendReminders(s.id, 'reminder')} className="btn-secondary text-xs py-1.5 px-3">
-                    📧 Send Reminder
-                  </button>
-                  <button onClick={() => sendReminders(s.id, 'deadline_warning')} className="btn-secondary text-xs py-1.5 px-3">
-                    ⚠️ Send Deadline Warning
-                  </button>
-                  {emailStatus[s.id + 'reminder'] && (
-                    <span className="text-green-400 text-xs">{emailStatus[s.id + 'reminder']}</span>
-                  )}
-                  {emailStatus[s.id + 'deadline_warning'] && (
-                    <span className="text-amber-400 text-xs">{emailStatus[s.id + 'deadline_warning']}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {semesters.length === 0 && (
-          <div className="card text-center py-10">
-            <p className="text-slate-400">No semesters yet. Create one above.</p>
+      {/* Active semesters */}
+      <h2 className="font-semibold text-white mb-3">Active Semesters</h2>
+      <div className="space-y-3 mb-8">
+        {active.map(s => <SemesterCard key={s.id} s={s} />)}
+        {active.length === 0 && (
+          <div className="card text-center py-8">
+            <p className="text-slate-400">No active semesters. Create one above.</p>
           </div>
         )}
       </div>
+
+      {/* History */}
+      {history.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium mb-3 transition-colors"
+          >
+            <span className={`transition-transform ${showHistory ? 'rotate-90' : ''}`}>▶</span>
+            History ({history.length} semester{history.length !== 1 ? 's' : ''})
+          </button>
+          {showHistory && (
+            <div className="space-y-3 opacity-80">
+              {history.map(s => <SemesterCard key={s.id} s={s} />)}
+            </div>
+          )}
+        </div>
+      )}
     </AdminLayout>
   )
 }

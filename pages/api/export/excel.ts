@@ -1,16 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
+import { getUserFromRequest } from '@/lib/apiAuth'
 import { generateExcel } from '@/lib/excel'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  const supabase = createPagesServerClient({ req, res })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return res.status(401).json({ error: 'Unauthorized' })
+  const user = await getUserFromRequest(req)
+  if (!user) return res.status(401).json({ error: 'Unauthorized' })
 
-  const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', session.user.id).single()
+  const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
 
   const semesterId = req.query.semesterId as string

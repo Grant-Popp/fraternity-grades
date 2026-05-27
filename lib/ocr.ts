@@ -1,6 +1,14 @@
 // Client-side OCR using Tesseract.js — do not import from server-side code
 import { gradeToGpa, percentageToGrade, VALID_GRADES } from './gpa'
 
+function execAll(str: string, re: RegExp): RegExpExecArray[] {
+  const results: RegExpExecArray[] = []
+  const r = new RegExp(re.source, re.flags)
+  let m: RegExpExecArray | null
+  while ((m = r.exec(str)) !== null) results.push(m)
+  return results
+}
+
 export interface OcrResult {
   rawText: string
   detectedGrade: string | null
@@ -57,7 +65,7 @@ function parseCourseGrades(text: string): Record<string, string> {
 
     // Look for the last letter grade on this line after the course ID
     const afterCourse = line.slice(courseMatch.index! + courseMatch[0].length)
-    const gradesOnLine = [...afterCourse.matchAll(gradeRe)]
+    const gradesOnLine = execAll(afterCourse, gradeRe)
       .map(m => m[1].toUpperCase())
       .filter(g => VALID_GRADES.has(g))
 
@@ -65,7 +73,7 @@ function parseCourseGrades(text: string): Record<string, string> {
       result[courseId] = gradesOnLine[gradesOnLine.length - 1]
     } else if (i + 1 < lines.length) {
       // Grade may appear on the next line due to OCR line wrapping
-      const nextLineGrades = [...lines[i + 1].matchAll(gradeRe)]
+      const nextLineGrades = execAll(lines[i + 1], gradeRe)
         .map(m => m[1].toUpperCase())
         .filter(g => VALID_GRADES.has(g))
       if (nextLineGrades.length > 0) {
@@ -92,7 +100,7 @@ function parseOcrText(text: string): OcrResult {
 
   // Pattern B: standalone letter grades (not part of a longer word)
   const patternB = /(?<![A-Za-z])([ABCDF][+-]?)(?![A-Za-z])/g
-  const allGrades = [...text.matchAll(patternB)]
+  const allGrades = execAll(text, patternB)
     .map(m => m[1].toUpperCase())
     .filter(g => VALID_GRADES.has(g))
 
@@ -103,7 +111,7 @@ function parseOcrText(text: string): OcrResult {
 
   // Pattern C: percentage fallback
   const patternC = /(\d{1,3}(?:\.\d{1,2})?)\s*%/g
-  const pctMatches = [...text.matchAll(patternC)]
+  const pctMatches = execAll(text, patternC)
   if (pctMatches.length > 0) {
     const pct = parseFloat(pctMatches[pctMatches.length - 1][1])
     if (pct >= 0 && pct <= 100) {

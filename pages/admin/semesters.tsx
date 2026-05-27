@@ -3,14 +3,17 @@ import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { useState } from 'react'
 import type { Semester } from '@/lib/database.types'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
 
 export default function SemestersPage({ semesters: initial }: { semesters: Semester[] }) {
   const [semesters, setSemesters] = useState(initial)
-  const [form, setForm] = useState({ name: '', deadline: '' })
+  const [formName, setFormName] = useState('')
+  const [formDeadline, setFormDeadline] = useState<Date | null>(null)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
-  const [editDeadline, setEditDeadline] = useState('')
+  const [editDeadline, setEditDeadline] = useState<Date | null>(null)
   const [saving, setSaving] = useState(false)
   const [emailStatus, setEmailStatus] = useState<Record<string, string>>({})
   const [archiveStatus, setArchiveStatus] = useState<Record<string, string>>({})
@@ -18,29 +21,32 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formDeadline) return setError('Please select a deadline.')
     setError('')
     setCreating(true)
     const res = await fetch('/api/semesters/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ name: formName, deadline: formDeadline.toISOString() }),
     })
     const data = await res.json()
     if (!res.ok) { setError(data.error); setCreating(false); return }
     setSemesters(prev => [data.semester, ...prev])
-    setForm({ name: '', deadline: '' })
+    setFormName('')
+    setFormDeadline(null)
     setCreating(false)
   }
 
   const updateDeadline = async (id: string) => {
+    if (!editDeadline) return
     setSaving(true)
     const res = await fetch('/api/semesters/update', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ semesterId: id, deadline: editDeadline }),
+      body: JSON.stringify({ semesterId: id, deadline: editDeadline.toISOString() }),
     })
     if (res.ok) {
-      setSemesters(prev => prev.map(s => s.id === id ? { ...s, deadline: editDeadline } : s))
+      setSemesters(prev => prev.map(s => s.id === id ? { ...s, deadline: editDeadline.toISOString() } : s))
       setEditId(null)
     }
     setSaving(false)
@@ -88,24 +94,47 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     }))
   }
 
-  // Format datetime-local value from ISO string
-  const toDatetimeLocal = (iso: string) => new Date(iso).toISOString().slice(0, 16)
-
   return (
     <AdminLayout title="Semesters & Deadlines">
+      <style>{`
+        .react-datepicker-wrapper { width: 100%; }
+        .react-datepicker__input-container input { width: 100%; }
+        .react-datepicker { font-family: inherit; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; }
+        .react-datepicker__header { background: #0f172a; border-bottom: 1px solid #334155; }
+        .react-datepicker__current-month, .react-datepicker__day-name, .react-datepicker-time__header { color: #e2e8f0; }
+        .react-datepicker__day { color: #cbd5e1; }
+        .react-datepicker__day:hover { background: #334155; color: white; border-radius: 4px; }
+        .react-datepicker__day--selected, .react-datepicker__day--keyboard-selected { background: #f59e0b; color: #0f172a; border-radius: 4px; }
+        .react-datepicker__time-container { border-left: 1px solid #334155; }
+        .react-datepicker__time { background: #1e293b; }
+        .react-datepicker__time-list-item { color: #cbd5e1; }
+        .react-datepicker__time-list-item:hover { background: #334155 !important; }
+        .react-datepicker__time-list-item--selected { background: #f59e0b !important; color: #0f172a !important; }
+        .react-datepicker__navigation-icon::before { border-color: #94a3b8; }
+        .react-datepicker__day--outside-month { color: #475569; }
+      `}</style>
+
       {/* Create form */}
       <div className="card mb-6">
         <h2 className="font-semibold text-white mb-4">Create New Semester</h2>
         <form onSubmit={create} className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-48">
             <label className="label">Semester Name</label>
-            <input className="input" placeholder="e.g. Fall 2025" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            <input className="input" placeholder="e.g. Fall 2025" value={formName}
+              onChange={e => setFormName(e.target.value)} required />
           </div>
           <div className="flex-1 min-w-48">
             <label className="label">Submission Deadline</label>
-            <input className="input" type="datetime-local" value={form.deadline}
-              onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} required />
+            <DatePicker
+              selected={formDeadline}
+              onChange={date => setFormDeadline(date)}
+              showTimeSelect
+              timeIntervals={15}
+              dateFormat="MM/dd/yyyy h:mm aa"
+              placeholderText="Click to pick date & time"
+              className="input w-full"
+              minDate={new Date()}
+            />
           </div>
           <button type="submit" className="btn-primary" disabled={creating}>
             {creating ? 'Creating…' : '+ Create'}
@@ -132,9 +161,16 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
 
                   {editId === s.id ? (
                     <div className="flex items-center gap-2 mt-2">
-                      <input className="input !w-auto" type="datetime-local" value={editDeadline}
-                        onChange={e => setEditDeadline(e.target.value)} />
-                      <button onClick={() => updateDeadline(s.id)} disabled={saving} className="btn-primary text-xs py-1.5">
+                      <DatePicker
+                        selected={editDeadline}
+                        onChange={date => setEditDeadline(date)}
+                        showTimeSelect
+                        timeIntervals={15}
+                        dateFormat="MM/dd/yyyy h:mm aa"
+                        placeholderText="Pick new deadline"
+                        className="input"
+                      />
+                      <button onClick={() => updateDeadline(s.id)} disabled={saving || !editDeadline} className="btn-primary text-xs py-1.5">
                         {saving ? '…' : 'Save'}
                       </button>
                       <button onClick={() => setEditId(null)} className="btn-secondary text-xs py-1.5">Cancel</button>
@@ -142,7 +178,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
                   ) : (
                     <p className="text-slate-400 text-sm">
                       Deadline: {new Date(s.deadline).toLocaleString()}
-                      <button onClick={() => { setEditId(s.id); setEditDeadline(toDatetimeLocal(s.deadline)) }}
+                      <button onClick={() => { setEditId(s.id); setEditDeadline(new Date(s.deadline)) }}
                         className="ml-2 text-amber-400 hover:text-amber-300 text-xs">Edit</button>
                     </p>
                   )}

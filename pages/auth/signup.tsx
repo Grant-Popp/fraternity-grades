@@ -5,9 +5,38 @@ import Link from 'next/link'
 
 const CLASS_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior']
 
+const MAJORS = [
+  'Accounting',
+  'Biology',
+  'Business Administration',
+  'Chemical Engineering',
+  'Chemistry',
+  'Civil Engineering',
+  'Communications',
+  'Computer Science',
+  'Criminal Justice',
+  'Economics',
+  'Education',
+  'Electrical Engineering',
+  'English',
+  'Finance',
+  'History',
+  'Kinesiology',
+  'Marketing',
+  'Mathematics',
+  'Mechanical Engineering',
+  'Nursing',
+  'Philosophy',
+  'Physics',
+  'Political Science',
+  'Psychology',
+  'Sociology',
+  'Other',
+]
+
 export default function SignupPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman', major: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman', major: '', majorOther: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -22,7 +51,7 @@ export default function SignupPage() {
     const { data, error: signupError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
-      options: { data: { full_name: form.full_name.trim(), class_year: form.class_year, major: form.major.trim() || null } },
+      options: { data: { full_name: form.full_name.trim(), class_year: form.class_year, major: form.major === 'Other' ? (form.majorOther.trim() || null) : (form.major || null) } },
     })
 
     if (signupError) { setError(signupError.message); setLoading(false); return }
@@ -63,8 +92,15 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="label">Major <span className="text-slate-500">(optional)</span></label>
-              <input className="input" type="text" placeholder="e.g. Finance, Engineering" value={form.major}
-                onChange={e => setForm(f => ({ ...f, major: e.target.value }))} />
+              <select className="input" value={form.major}
+                onChange={e => setForm(f => ({ ...f, major: e.target.value, majorOther: '' }))}>
+                <option value="">— Select your major —</option>
+                {MAJORS.map(m => <option key={m}>{m}</option>)}
+              </select>
+              {form.major === 'Other' && (
+                <input className="input mt-2" type="text" placeholder="Enter your major"
+                  value={form.majorOther} onChange={e => setForm(f => ({ ...f, majorOther: e.target.value }))} />
+              )}
             </div>
             <div>
               <label className="label">Password</label>

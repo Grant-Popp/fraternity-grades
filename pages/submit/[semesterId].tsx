@@ -1,17 +1,26 @@
 import { GetServerSideProps } from 'next'
 import { requireAuth } from '@/lib/auth'
-import type { Semester } from '@/lib/database.types'
+import type { Semester, SemesterRound, MemberCourse } from '@/lib/database.types'
 import Layout from '@/components/layout/Layout'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { GRADE_MAP } from '@/lib/gpa'
 
 interface Props {
   semester: Semester
   alreadySubmitted: boolean
+  activeRound: SemesterRound | null
+  memberCourses: MemberCourse[]
 }
 
-type Step = 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'done'
+type Step = 'course_entry' | 'course_review' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'done'
+
+interface CourseRow {
+  key: string
+  course_id: string
+  course_name: string
+  credits: string
+}
 
 interface OcrState {
   rawText: string
@@ -19,46 +28,130 @@ interface OcrState {
   gpa: number | null
   confidence: 'high' | 'medium' | 'low' | 'none'
   allGrades: string[]
+  courseGrades: Record<string, string>
 }
 
-export default function SubmitPage({ semester, alreadySubmitted }: Props) {
+export default function SubmitPage({ semester, alreadySubmitted, activeRound, memberCourses: initialCourses }: Props) {
   const router = useRouter()
   const submitLockRef = useRef(false)
 
-  const [step, setStep] = useState<Step>('choose')
+  const getInitialStep = (): Step => {
+    if (!activeRound) return 'choose'
+    if (initialCourses.filter(c => c.status === 'active').length === 0) return 'course_entry'
+    return 'course_review'
+  }
+
+  const [step, setStep] = useState<Step>(getInitialStep)
+
+  // Course entry state
+  const [courseRows, setCourseRows] = useState<CourseRow[]>([
+    { key: '1', course_id: '', course_name: '', credits: '' },
+  ])
+  const [courseEntryError, setCourseEntryError] = useState('')
+  const [savingCourses, setSavingCourses] = useState(false)
+
+  // Course review / drop state
+  const [pendingDrops, setPendingDrops] = useState<string[]>([])
+  const [savingDrops, setSavingDrops] = useState(false)
+
+  // Photo/OCR state
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [ocrFailed, setOcrFailed] = useState(false)
 
-  // Revoke blob URL on cleanup to prevent memory leaks
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview) }
   }, [preview])
+
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrState, setOcrState] = useState<OcrState | null>(null)
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const isPastDeadline = new Date(semester.deadline) < new Date()
+  const activeDeadline = activeRound?.deadline ?? semester.deadline
+  const isPastDeadline = new Date(activeDeadline) < new Date()
 
+  // ── Course Entry ──────────────────────────────────────────
+  const addCourseRow = () =>
+    setCourseRows(prev => [...prev, { key: Date.now().toString(), course_id: '', course_name: '', credits: '' }])
+
+  const updateCourseRow = (key: string, field: keyof CourseRow, value: string) =>
+    setCourseRows(prev => prev.map(r => r.key === key ? { ...r, [field]: value } : r))
+
+  const removeCourseRow = (key: string) =>
+    setCourseRows(prev => prev.length > 1 ? prev.filter(r => r.key !== key) : prev)
+
+  const handleSaveCourses = async () => {
+    setCourseEntryError('')
+    const filled = courseRows.filter(r => r.course_id.trim() || r.course_name.trim() || r.credits.trim())
+    if (filled.length === 0) { setCourseEntryError('Add at least one course.'); return }
+    for (const r of filled) {
+      if (!r.course_id.trim()) { setCourseEntryError('Course ID is required for all rows.'); return }
+      if (!r.course_name.trim()) { setCourseEntryError('Course name is required for all rows.'); return }
+      const cr = parseInt(r.credits)
+      if (isNaN(cr) || cr < 1 || cr > 6) { setCourseEntryError('Credits must be a number 1–6 for all rows.'); return }
+    }
+    setSavingCourses(true)
+    const res = await fetch('/api/courses/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        semesterId: semester.id,
+        courses: filled.map(r => ({
+          course_id: r.course_id.toUpperCase().trim(),
+          course_name: r.course_name.trim(),
+          credits: parseInt(r.credits),
+        })),
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setCourseEntryError(data.error); setSavingCourses(false); return }
+    setSavingCourses(false)
+    setStep('choose')
+  }
+
+  // ── Course Review / Drops ─────────────────────────────────
+  const toggleDrop = (courseId: string, courseName: string) => {
+    if (pendingDrops.includes(courseId)) {
+      setPendingDrops(prev => prev.filter(id => id !== courseId))
+      return
+    }
+    if (!window.confirm(
+      `Mark ${courseId} — ${courseName} as dropped?\n\nThe VP of Academics will be notified. This cannot be undone.`
+    )) return
+    setPendingDrops(prev => [...prev, courseId])
+  }
+
+  const handleContinueFromReview = async () => {
+    if (pendingDrops.length > 0) {
+      setSavingDrops(true)
+      for (const courseId of pendingDrops) {
+        await fetch('/api/courses/drop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ semesterId: semester.id, courseId }),
+        })
+      }
+      setSavingDrops(false)
+    }
+    setStep('choose')
+  }
+
+  // ── Photo / OCR ───────────────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
-
-    const MAX_MB = 5
-    if (f.size > MAX_MB * 1024 * 1024) {
-      setError(`File is too large. Please upload an image under ${MAX_MB}MB. Screenshots are usually well under 1MB.`)
+    if (f.size > 5 * 1024 * 1024) {
+      setError('File is too large. Please upload an image under 5MB.')
       return
     }
-
     if (preview) URL.revokeObjectURL(preview)
     setFile(f)
     setPreview(URL.createObjectURL(f))
     setStep('ocr')
     setOcrLoading(true)
     setOcrFailed(false)
-
     try {
       const { runOcr } = await import('@/lib/ocr')
       const result = await runOcr(f)
@@ -66,7 +159,7 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
       setSelectedGrade(result.detectedGrade ?? '')
     } catch {
       setOcrFailed(true)
-      setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [] })
+      setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [], courseGrades: {} })
     } finally {
       setOcrLoading(false)
       setStep('confirm')
@@ -78,16 +171,15 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
     submitLockRef.current = true
     setSubmitting(true)
     setError('')
-
     const formData = new FormData()
     formData.append('file', file)
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', ocrState?.rawText ?? '')
     formData.append('ocrGrade', selectedGrade)
-
+    formData.append('courseGrades', JSON.stringify(ocrState?.courseGrades ?? {}))
+    if (activeRound) formData.append('roundId', activeRound.id)
     const res = await fetch('/api/submissions/create', { method: 'POST', body: formData })
     const data = await res.json()
-
     if (!res.ok) {
       setError(data.error ?? 'Submission failed.')
       submitLockRef.current = false
@@ -104,11 +196,10 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
     submitLockRef.current = true
     setSubmitting(true)
     setError('')
-
     const res = await fetch('/api/submissions/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ semesterId: semester.id, noGrade: true }),
+      body: JSON.stringify({ semesterId: semester.id, noGrade: true, roundId: activeRound?.id }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -129,13 +220,19 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
     high: 'High confidence', medium: 'Medium confidence', low: 'Low confidence (percentage fallback)', none: 'Grade not detected',
   }
 
+  const pageTitle = activeRound ? `${semester.name} — ${activeRound.name}` : semester.name
+
+  // ── Guard screens ─────────────────────────────────────────
   if (alreadySubmitted) {
     return (
-      <Layout title={semester.name}>
+      <Layout title={pageTitle}>
         <div className="card text-center py-12 max-w-lg mx-auto">
           <p className="text-4xl mb-3">✅</p>
           <p className="text-white font-semibold text-lg">Already submitted</p>
-          <p className="text-slate-400 text-sm mt-1">You&apos;ve already submitted grades for {semester.name}.</p>
+          <p className="text-slate-400 text-sm mt-1">
+            You&apos;ve already submitted grades for {pageTitle}.
+            {activeRound && ' The VP of Academics will open a new round when it\'s time to check again.'}
+          </p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
         </div>
       </Layout>
@@ -144,11 +241,11 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
 
   if (isPastDeadline) {
     return (
-      <Layout title={semester.name}>
+      <Layout title={pageTitle}>
         <div className="card text-center py-12 max-w-lg mx-auto">
           <p className="text-4xl mb-3">⏰</p>
           <p className="text-white font-semibold text-lg">Deadline has passed</p>
-          <p className="text-slate-400 text-sm mt-1">The submission window for {semester.name} is closed.</p>
+          <p className="text-slate-400 text-sm mt-1">The submission window for {pageTitle} is closed.</p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
         </div>
       </Layout>
@@ -161,31 +258,146 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
         <div className="card text-center py-12 max-w-lg mx-auto">
           <p className="text-5xl mb-4">🎉</p>
           <h2 className="text-2xl font-bold text-white mb-2">Submission Received</h2>
-          <p className="text-slate-400 mb-6">Your grade for <strong className="text-white">{semester.name}</strong> has been submitted. The VP of Academics will review it shortly.</p>
+          <p className="text-slate-400 mb-6">
+            Your grades for <strong className="text-white">{pageTitle}</strong> have been submitted. The VP of Academics will review them shortly.
+          </p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
         </div>
       </Layout>
     )
   }
 
+  // ── Main form ─────────────────────────────────────────────
   return (
-    <Layout title={`Submit Grades — ${semester.name}`}>
+    <Layout title={`Submit Grades — ${pageTitle}`}>
       <div className="max-w-2xl mx-auto">
+
+        {/* Header */}
         <div className="card mb-4 flex items-center justify-between">
           <div>
             <p className="text-slate-400 text-sm">Semester</p>
             <p className="text-white font-semibold">{semester.name}</p>
+            {activeRound && <p className="text-amber-400 text-xs mt-0.5">{activeRound.name}</p>}
           </div>
           <div className="text-right">
             <p className="text-slate-400 text-sm">Deadline</p>
-            <p className="text-amber-400 font-semibold text-sm">{new Date(semester.deadline).toLocaleString()}</p>
+            <p className="text-amber-400 font-semibold text-sm">{new Date(activeDeadline).toLocaleString()}</p>
           </div>
         </div>
 
-        {/* Hidden file input — label association opens picker natively on iOS without programmatic click */}
         <input id="grade-photo" type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={handleFileChange} />
 
-        {/* Choose path */}
+        {/* Step: Enter courses (first time) */}
+        {step === 'course_entry' && (
+          <div className="card">
+            <h3 className="font-semibold text-white mb-1">Enter Your Courses</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              List every class you&apos;re enrolled in this semester. You only need to do this once — future rounds will remember your course list.
+            </p>
+            <div className="mb-1 hidden sm:grid sm:grid-cols-[1fr_2fr_60px_28px] gap-2">
+              <span className="text-slate-500 text-xs">Course ID</span>
+              <span className="text-slate-500 text-xs">Course Name</span>
+              <span className="text-slate-500 text-xs text-center">Credits</span>
+              <span />
+            </div>
+            <div className="space-y-2 mb-4">
+              {courseRows.map(row => (
+                <div key={row.key} className="grid grid-cols-[1fr_2fr_60px_28px] gap-2 items-center">
+                  <input
+                    className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                    placeholder="ENGR 110"
+                    value={row.course_id}
+                    onChange={e => updateCourseRow(row.key, 'course_id', e.target.value)}
+                  />
+                  <input
+                    className="input !py-1.5 !text-sm"
+                    placeholder="Engineering Fundamentals"
+                    value={row.course_name}
+                    onChange={e => updateCourseRow(row.key, 'course_name', e.target.value)}
+                  />
+                  <input
+                    className="input !py-1.5 !text-sm text-center"
+                    placeholder="3"
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={row.credits}
+                    onChange={e => updateCourseRow(row.key, 'credits', e.target.value)}
+                  />
+                  <button
+                    onClick={() => removeCourseRow(row.key)}
+                    disabled={courseRows.length === 1}
+                    className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30"
+                  >×</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addCourseRow} className="text-amber-400 hover:text-amber-300 text-sm mb-4 block">
+              + Add another course
+            </button>
+            {courseEntryError && <p className="text-red-400 text-sm mb-3 bg-red-900/20 px-3 py-2 rounded-lg">{courseEntryError}</p>}
+            <button onClick={handleSaveCourses} disabled={savingCourses} className="btn-primary w-full">
+              {savingCourses ? 'Saving…' : 'Continue →'}
+            </button>
+          </div>
+        )}
+
+        {/* Step: Review courses (subsequent rounds) */}
+        {step === 'course_review' && (
+          <div className="card">
+            <h3 className="font-semibold text-white mb-1">Your Courses — {activeRound?.name}</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              Review your course list. If you&apos;ve dropped a class since last round, mark it here.
+            </p>
+            <div className="space-y-2 mb-5">
+              {initialCourses.map(c => {
+                const alreadyDropped = c.status === 'dropped'
+                const pendingDrop = pendingDrops.includes(c.course_id)
+                const isDropped = alreadyDropped || pendingDrop
+                return (
+                  <div key={c.course_id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${
+                    isDropped ? 'border-red-800/40 bg-red-900/10' : 'border-slate-700 bg-slate-800/40'
+                  }`}>
+                    <div className="flex-1 min-w-0 mr-3">
+                      <p className={`font-medium text-sm ${isDropped ? 'text-slate-500 line-through' : 'text-white'}`}>
+                        {c.course_id} — {c.course_name}
+                      </p>
+                      <p className="text-slate-500 text-xs">{c.credits} credit{c.credits !== 1 ? 's' : ''}</p>
+                    </div>
+                    {alreadyDropped && !pendingDrop ? (
+                      <span className="text-red-400 text-xs font-medium shrink-0">Dropped</span>
+                    ) : pendingDrop ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-red-400 text-xs font-medium">Will drop</span>
+                        <button
+                          onClick={() => setPendingDrops(prev => prev.filter(id => id !== c.course_id))}
+                          className="text-xs text-slate-400 hover:text-slate-200 underline"
+                        >Undo</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => toggleDrop(c.course_id, c.course_name)}
+                        className="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0"
+                      >
+                        Mark as dropped
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {pendingDrops.length > 0 && (
+              <p className="text-amber-400 text-xs mb-3 bg-amber-900/20 px-3 py-2 rounded-lg">
+                ⚠️ {pendingDrops.length} course{pendingDrops.length !== 1 ? 's' : ''} marked as dropped. The VP of Academics will be notified when you continue.
+              </p>
+            )}
+            <button onClick={handleContinueFromReview} disabled={savingDrops} className="btn-primary w-full">
+              {savingDrops ? 'Saving…' : `Continue${pendingDrops.length > 0 ? ` (${pendingDrops.length} dropped)` : ''} →`}
+            </button>
+          </div>
+        )}
+
+        {/* Step: Choose upload path */}
         {step === 'choose' && (
           <div className="grid md:grid-cols-2 gap-4">
             <label
@@ -196,19 +408,18 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
               <p className="font-bold text-white text-lg">Upload Blackboard Screenshot</p>
               <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
             </label>
-
             <button
               onClick={() => setStep('no_grade')}
               className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
             >
               <p className="text-3xl mb-3">🚫</p>
               <p className="font-bold text-white text-lg">No Grade This Semester</p>
-              <p className="text-slate-400 text-sm mt-1">Select this if you are not enrolled or taking classes this semester.</p>
+              <p className="text-slate-400 text-sm mt-1">Select this if you are not enrolled or not taking graded classes.</p>
             </button>
           </div>
         )}
 
-        {/* OCR loading */}
+        {/* Step: OCR loading */}
         {step === 'ocr' && (
           <div className="card text-center py-12">
             <div className="inline-block w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -217,7 +428,7 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
           </div>
         )}
 
-        {/* OCR result + confirm */}
+        {/* Step: Confirm OCR result */}
         {step === 'confirm' && ocrState && (
           <div className="space-y-4">
             {preview && (
@@ -226,7 +437,6 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
                 <img src={preview} alt="Grade screenshot" className="max-h-64 object-contain w-full rounded" />
               </div>
             )}
-
             <div className="card">
               <h3 className="font-semibold text-white mb-3">OCR Result</h3>
               <div className="flex items-center justify-between mb-3">
@@ -235,7 +445,6 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
                   {confidenceLabel[ocrState.confidence]}
                 </span>
               </div>
-
               <div>
                 <label className="label">Detected Grade (verify or correct)</label>
                 <select className="input" value={selectedGrade} onChange={e => setSelectedGrade(e.target.value)}>
@@ -248,7 +457,19 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
                   <p className="text-xs text-slate-400 mt-1">All detected grades: {ocrState.allGrades.join(', ')}</p>
                 )}
               </div>
-
+              {Object.keys(ocrState.courseGrades).length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-700">
+                  <p className="text-slate-400 text-xs mb-2">Detected course grades — verify these look correct:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(ocrState.courseGrades).map(([course, grade]) => (
+                      <span key={course} className="text-xs bg-slate-800 px-2.5 py-1 rounded-full">
+                        <span className="text-slate-400">{course}</span>{' '}
+                        <span className="font-semibold text-white">{grade}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
               {ocrState.confidence === 'none' && (
                 <p className="text-amber-400 text-sm mt-2 bg-amber-900/20 px-3 py-2 rounded-lg">
                   {ocrFailed
@@ -257,9 +478,7 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
                 </p>
               )}
             </div>
-
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
-
             <div className="flex gap-3">
               <button onClick={() => setStep('choose')} className="btn-secondary flex-1">← Back</button>
               <button onClick={handleSubmitPhoto} className="btn-primary flex-1" disabled={!selectedGrade || submitting}>
@@ -269,13 +488,14 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
           </div>
         )}
 
-        {/* No grade confirmation */}
+        {/* Step: No grade confirmation */}
         {step === 'no_grade' && (
           <div className="card text-center py-10">
             <p className="text-4xl mb-4">🚫</p>
             <h3 className="text-white font-semibold text-lg mb-2">Confirm: No Grade This Semester</h3>
             <p className="text-slate-400 text-sm mb-6">
-              You are indicating that you have no grades to report for <strong className="text-white">{semester.name}</strong>. This will be recorded and reviewed by the VP of Academics.
+              You are indicating that you have no grades to report for <strong className="text-white">{semester.name}</strong>.
+              This will be recorded and reviewed by the VP of Academics.
             </p>
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg mb-4">{error}</p>}
             <div className="flex gap-3 justify-center">
@@ -286,6 +506,7 @@ export default function SubmitPage({ semester, alreadySubmitted }: Props) {
             </div>
           </div>
         )}
+
       </div>
     </Layout>
   )
@@ -300,8 +521,35 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { data: semester } = await supabase.from('semesters').select('*').eq('id', semesterId).single()
   if (!semester) return { notFound: true }
 
-  const { data: existing } = await supabase.from('submissions')
-    .select('id').eq('member_id', session!.user.id).eq('semester_id', semesterId).single()
+  // Find the active round for this semester (most recent if multiple active somehow)
+  const { data: activeRound } = await supabase
+    .from('semester_rounds')
+    .select('*')
+    .eq('semester_id', semesterId)
+    .eq('is_active', true)
+    .order('round_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  return { props: { semester, alreadySubmitted: !!existing } }
+  // Check for existing submission (per-round if round exists, per-semester otherwise)
+  let alreadySubmitted = false
+  if (activeRound) {
+    const { data: existing } = await supabase
+      .from('submissions').select('id').eq('member_id', session!.user.id).eq('round_id', activeRound.id).maybeSingle()
+    alreadySubmitted = !!existing
+  } else {
+    const { data: existing } = await supabase
+      .from('submissions').select('id').eq('member_id', session!.user.id).eq('semester_id', semesterId).maybeSingle()
+    alreadySubmitted = !!existing
+  }
+
+  // Load member's course list for this semester
+  const { data: memberCourses } = await supabase
+    .from('member_courses')
+    .select('*')
+    .eq('member_id', session!.user.id)
+    .eq('semester_id', semesterId)
+    .order('created_at', { ascending: true })
+
+  return { props: { semester, alreadySubmitted, activeRound: activeRound ?? null, memberCourses: memberCourses ?? [] } }
 }

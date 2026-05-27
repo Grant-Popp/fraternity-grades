@@ -2,18 +2,21 @@ import { GetServerSideProps } from 'next'
 import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { useState } from 'react'
-import { gpaColorClass, GRADE_MAP } from '@/lib/gpa'
-import type { Submission, Profile, Semester } from '@/lib/database.types'
+import { gpaColorClass, gradeToGpa, GRADE_MAP } from '@/lib/gpa'
+import type { Submission, Profile, Semester, DropAlert } from '@/lib/database.types'
 
 interface EnrichedSubmission extends Submission {
   member_name: string
   member_class_year: string
   semester_name: string
+  round_name: string | null
+  round_number: number | null
 }
 
 interface Props {
   submissions: EnrichedSubmission[]
   semesters: Semester[]
+  dropAlerts: DropAlert[]
 }
 
 function StatusBadge({ s }: { s: EnrichedSubmission }) {
@@ -75,14 +78,24 @@ function GpaEditor({ sub, onSave }: { sub: EnrichedSubmission; onSave: (id: stri
   )
 }
 
-export default function SubmissionsPage({ submissions: initialSubs, semesters }: Props) {
+export default function SubmissionsPage({ submissions: initialSubs, semesters, dropAlerts: initialAlerts }: Props) {
   const [subs, setSubs] = useState(initialSubs)
+  const [alerts, setAlerts] = useState(initialAlerts)
   const [filterSem, setFilterSem] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterYear, setFilterYear] = useState('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [loadingPhoto, setLoadingPhoto] = useState<string | null>(null)
+
+  const acknowledgeAlert = async (alertId: string) => {
+    await fetch('/api/drops/acknowledge', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alertId }),
+    })
+    setAlerts(prev => prev.filter(a => a.id !== alertId))
+  }
 
   const filtered = subs.filter(s => {
     if (filterSem !== 'all' && s.semester_id !== filterSem) return false
@@ -114,6 +127,29 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
 
   return (
     <AdminLayout title="Submissions">
+      {/* Drop alerts */}
+      {alerts.length > 0 && (
+        <div className="mb-5 space-y-2">
+          <p className="text-red-400 text-sm font-semibold">⚠️ {alerts.length} Course Drop Alert{alerts.length !== 1 ? 's' : ''}</p>
+          {alerts.map(a => (
+            <div key={a.id} className="flex items-center justify-between bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3 gap-4">
+              <div>
+                <p className="text-white text-sm font-medium">
+                  {a.member_name} dropped <span className="text-red-300">{a.course_id} — {a.course_name}</span> ({a.credits} cr)
+                </p>
+                <p className="text-slate-400 text-xs mt-0.5">{new Date(a.created_at).toLocaleString()}</p>
+              </div>
+              <button
+                onClick={() => acknowledgeAlert(a.id)}
+                className="text-xs text-slate-400 hover:text-slate-200 shrink-0 border border-slate-600 rounded px-2 py-1"
+              >
+                Acknowledge
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <select className="input !w-auto" value={filterSem} onChange={e => setFilterSem(e.target.value)}>
@@ -139,7 +175,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-900/60 border-b border-slate-700">
-                {['Member','Year','Semester','Submitted','OCR GPA','Final GPA','Status','Actions'].map(h => (
+                {['Member','Year','Semester','Round','Submitted','OCR GPA','Final GPA','Status','Actions'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -151,6 +187,9 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
                     <td className="px-4 py-3 text-white font-medium">{s.member_name}</td>
                     <td className="px-4 py-3 text-slate-300">{s.member_class_year}</td>
                     <td className="px-4 py-3 text-slate-300">{s.semester_name}</td>
+                    <td className="px-4 py-3 text-slate-400 whitespace-nowrap text-xs">
+                      {s.round_name ?? <span className="text-slate-600">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{new Date(s.submitted_at).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
                       {s.no_grade ? <span className="text-slate-500 italic">N/A</span> : (
@@ -176,7 +215,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
                   </tr>
                   {expandedId === s.id && s.photo_url && (
                     <tr key={`${s.id}-expand`} className="bg-slate-900/40">
-                      <td colSpan={8} className="px-4 py-4">
+                      <td colSpan={9} className="px-4 py-4">
                         <div className="flex gap-6">
                           {signedUrls[s.id] ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -187,6 +226,23 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters }:
                             </div>
                           )}
                           <div className="flex-1">
+                            {s.course_grades && Object.keys(s.course_grades).length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-slate-400 text-xs mb-2">Course grades (OCR detected):</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {Object.entries(s.course_grades).map(([course, grade]) => {
+                                    const gpa = gradeToGpa(grade)
+                                    return (
+                                      <span key={course} className="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full">
+                                        <span className="text-slate-400">{course}</span>
+                                        {' '}
+                                        <span className={`font-semibold ${gpa != null ? gpaColorClass(gpa) : 'text-white'}`}>{grade}</span>
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
                             <p className="text-slate-400 text-xs mb-2">Raw OCR text:</p>
                             <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-40">{s.ocr_raw_text ?? '—'}</pre>
                             {s.duplicate_flag && (
@@ -219,21 +275,26 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
   const { supabaseAdmin } = await import('@/lib/supabaseAdmin')
 
-  const { data: rawSubs } = await supabaseAdmin
-    .from('submissions')
-    .select('*, profiles(full_name, class_year), semesters(name)')
-    .order('submitted_at', { ascending: false })
+  const [rawSubsRes, semestersRes, dropAlertsRes] = await Promise.all([
+    supabaseAdmin
+      .from('submissions')
+      .select('*, profiles(full_name, class_year), semesters(name), semester_rounds(name, round_number)')
+      .order('submitted_at', { ascending: false }),
+    supabase.from('semesters').select('id,name').order('created_at', { ascending: false }),
+    supabaseAdmin.from('drop_alerts').select('*').eq('acknowledged', false).order('created_at', { ascending: false }),
+  ])
 
-  const { data: semesters } = await supabase.from('semesters').select('id,name').order('created_at', { ascending: false })
-
-  const submissions: EnrichedSubmission[] = (rawSubs ?? []).map((s: any) => ({
+  const submissions: EnrichedSubmission[] = (rawSubsRes.data ?? []).map((s: any) => ({
     ...s,
     member_name: s.profiles?.full_name ?? 'Unknown',
     member_class_year: s.profiles?.class_year ?? '—',
     semester_name: s.semesters?.name ?? '—',
+    round_name: s.semester_rounds?.name ?? null,
+    round_number: s.semester_rounds?.round_number ?? null,
     profiles: undefined,
     semesters: undefined,
+    semester_rounds: undefined,
   }))
 
-  return { props: { submissions, semesters: semesters ?? [] } }
+  return { props: { submissions, semesters: semestersRes.data ?? [], dropAlerts: dropAlertsRes.data ?? [] } }
 }

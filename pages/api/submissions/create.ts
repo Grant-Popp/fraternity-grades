@@ -32,12 +32,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid request body' })
     }
 
-    const { semesterId } = body
+    const { semesterId, roundId } = body
     if (!semesterId) return res.status(400).json({ error: 'semesterId required' })
+
+    // Deadline check: use round deadline if round provided, else semester deadline
+    let effectiveDeadline: string
+    if (roundId) {
+      const { data: round } = await supabaseAdmin.from('semester_rounds').select('deadline').eq('id', roundId).maybeSingle()
+      if (!round) return res.status(404).json({ error: 'Round not found' })
+      effectiveDeadline = round.deadline
+    } else {
+      const { data: sem } = await supabaseAdmin.from('semesters').select('deadline').eq('id', semesterId).maybeSingle()
+      if (!sem) return res.status(404).json({ error: 'Semester not found' })
+      effectiveDeadline = sem.deadline
+    }
+    if (new Date(effectiveDeadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
 
     const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name,required_years').eq('id', semesterId).single()
     if (!semester) return res.status(404).json({ error: 'Semester not found' })
-    if (new Date(semester.deadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
 
     if (semester.required_years?.length) {
       const { data: mp } = await supabaseAdmin.from('profiles').select('class_year').eq('id', user.id).maybeSingle()
@@ -46,9 +58,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Check for duplicate submission in same round (or semester for legacy)
+    if (roundId) {
+      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).maybeSingle()
+      if (dup) return res.status(400).json({ error: 'Already submitted for this round' })
+    } else {
+      const { data: dup } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
+      if (dup) return res.status(400).json({ error: 'Already submitted for this semester' })
+    }
+
     const { error } = await supabaseAdmin.from('submissions').insert({
       member_id: user.id,
       semester_id: semesterId,
+      round_id: roundId ?? null,
       no_grade: true,
       status: 'no_grade',
     })
@@ -71,9 +93,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const [fields, files] = await form.parse(req)
 
   const semesterId = Array.isArray(fields.semesterId) ? fields.semesterId[0] : fields.semesterId
+  const roundId = Array.isArray(fields.roundId) ? fields.roundId[0] : fields.roundId ?? null
   const ocrRawText = Array.isArray(fields.ocrRawText) ? fields.ocrRawText[0] : fields.ocrRawText ?? ''
   const ocrGrade = Array.isArray(fields.ocrGrade) ? fields.ocrGrade[0] : fields.ocrGrade ?? ''
+  const courseGradesRaw = Array.isArray(fields.courseGrades) ? fields.courseGrades[0] : fields.courseGrades ?? '{}'
   const imageFile = Array.isArray(files.file) ? files.file[0] : files.file
+
+  let courseGradesData: Record<string, string> = {}
+  try { courseGradesData = JSON.parse(courseGradesRaw) } catch {}
 
   if (!semesterId || !imageFile) return res.status(400).json({ error: 'Missing required fields' })
 
@@ -84,7 +111,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: semester } = await supabaseAdmin.from('semesters').select('deadline,name,required_years').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
-  if (new Date(semester.deadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
+
+  // Use round deadline if round provided, otherwise semester deadline
+  let effectiveDeadline = semester.deadline
+  if (roundId) {
+    const { data: round } = await supabaseAdmin.from('semester_rounds').select('deadline').eq('id', roundId).maybeSingle()
+    if (!round) return res.status(404).json({ error: 'Round not found' })
+    effectiveDeadline = round.deadline
+  }
+  if (new Date(effectiveDeadline) < new Date()) return res.status(400).json({ error: 'Submission deadline has passed' })
 
   if (semester.required_years?.length) {
     const { data: mp } = await supabaseAdmin.from('profiles').select('class_year').eq('id', user.id).maybeSingle()
@@ -93,9 +128,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  const { data: existing } = await supabaseAdmin.from('submissions')
-    .select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
-  if (existing) return res.status(400).json({ error: 'Already submitted for this semester' })
+  // Duplicate check: by round if round-based, else by semester
+  if (roundId) {
+    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('round_id', roundId).maybeSingle()
+    if (existing) return res.status(400).json({ error: 'Already submitted for this round' })
+  } else {
+    const { data: existing } = await supabaseAdmin.from('submissions').select('id').eq('member_id', user.id).eq('semester_id', semesterId).maybeSingle()
+    if (existing) return res.status(400).json({ error: 'Already submitted for this semester' })
+  }
 
   // Read file safely
   let fileBuffer: Buffer
@@ -135,12 +175,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     semester_id: semesterId,
     photo_url: storagePath,
     no_grade: false,
+    round_id: roundId ?? null,
     ocr_raw_text: ocrRawText,
     ocr_gpa: ocrGpa,
     final_gpa: ocrGpa,
     status: 'pending',
     photo_phash,
     duplicate_flag,
+    course_grades: Object.keys(courseGradesData).length > 0 ? courseGradesData : null,
   })
 
   // Clean up orphaned storage file if insert failed

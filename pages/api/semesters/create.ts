@@ -23,5 +23,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: semester, error } = await supabaseAdmin.from('semesters').insert({ name, deadline, required_years: years }).select().single()
   if (error) return res.status(400).json({ error: error.message })
 
-  return res.status(200).json({ semester })
+  // Auto-create Round 1 with the same deadline
+  const { data: round } = await supabaseAdmin.from('semester_rounds').insert({
+    semester_id: semester.id,
+    round_number: 1,
+    name: 'Round 1',
+    deadline,
+    is_active: true,
+  }).select().single()
+
+  return res.status(200).json({ semester, round })
 }

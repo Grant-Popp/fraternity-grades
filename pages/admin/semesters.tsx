@@ -2,14 +2,15 @@ import { GetServerSideProps } from 'next'
 import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { useState } from 'react'
-import type { Semester } from '@/lib/database.types'
+import type { Semester, SemesterRound } from '@/lib/database.types'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 
 const ALL_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior']
 
-export default function SemestersPage({ semesters: initial }: { semesters: Semester[] }) {
+export default function SemestersPage({ semesters: initial, rounds: initialRounds }: { semesters: Semester[]; rounds: SemesterRound[] }) {
   const [semesters, setSemesters] = useState(initial)
+  const [rounds, setRounds] = useState(initialRounds)
   const [formName, setFormName] = useState('')
   const [formDeadline, setFormDeadline] = useState<Date | null>(null)
   const [formYears, setFormYears] = useState<string[]>([])
@@ -23,6 +24,11 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
   const [reminderYears, setReminderYears] = useState<Record<string, string[]>>({})
   const [showHistory, setShowHistory] = useState(false)
+  // Round management state
+  const [creatingRoundFor, setCreatingRoundFor] = useState<string | null>(null)
+  const [newRoundName, setNewRoundName] = useState('')
+  const [newRoundDeadline, setNewRoundDeadline] = useState<Date | null>(null)
+  const [savingRound, setSavingRound] = useState(false)
 
   const active = semesters.filter(s => s.is_active)
   const history = semesters.filter(s => !s.is_active)
@@ -113,7 +119,35 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     }))
   }
 
+  const createRound = async (semesterId: string) => {
+    if (!newRoundDeadline) return
+    setSavingRound(true)
+    const res = await fetch('/api/rounds/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semesterId, name: newRoundName || `Round ${(rounds.filter(r => r.semester_id === semesterId).length) + 1}`, deadline: newRoundDeadline.toISOString() }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setRounds(prev => [...prev, data.round])
+      setCreatingRoundFor(null)
+      setNewRoundName('')
+      setNewRoundDeadline(null)
+    }
+    setSavingRound(false)
+  }
+
+  const toggleRound = async (r: SemesterRound) => {
+    const res = await fetch('/api/rounds/update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roundId: r.id, isActive: !r.is_active }),
+    })
+    if (res.ok) setRounds(prev => prev.map(x => x.id === r.id ? { ...x, is_active: !r.is_active } : x))
+  }
+
   const SemesterCard = ({ s }: { s: Semester }) => {
+    const semRounds = rounds.filter(r => r.semester_id === s.id).sort((a, b) => a.round_number - b.round_number)
     const isPast = new Date(s.deadline) < new Date()
     const years = reminderYears[s.id] ?? ALL_YEARS
 
@@ -229,6 +263,83 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
             </div>
           </div>
         )}
+
+        {/* Rounds section */}
+        <div className="mt-4 pt-4 border-t border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-slate-300 text-sm font-medium">Submission Rounds</p>
+            {s.is_active && (
+              <button
+                onClick={() => { setCreatingRoundFor(s.id); setNewRoundName(''); setNewRoundDeadline(null) }}
+                className="text-amber-400 hover:text-amber-300 text-xs"
+              >
+                + New Round
+              </button>
+            )}
+          </div>
+
+          {semRounds.length === 0 ? (
+            <p className="text-slate-500 text-xs">Round 1 will be created automatically when you create a semester. Create additional rounds here to open a fresh submission window.</p>
+          ) : (
+            <div className="space-y-2 mb-2">
+              {semRounds.map(r => (
+                <div key={r.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-white text-sm">{r.name}</p>
+                    <p className="text-slate-400 text-xs">
+                      Due {new Date(r.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${r.is_active ? 'bg-green-900 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
+                      {r.is_active ? 'Open' : 'Closed'}
+                    </span>
+                    <button onClick={() => toggleRound(r)} className="btn-secondary text-xs py-0.5 px-2">
+                      {r.is_active ? 'Close' : 'Reopen'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {creatingRoundFor === s.id && (
+            <div className="mt-3 flex flex-wrap gap-2 items-end border-t border-slate-700/50 pt-3">
+              <div className="flex-1 min-w-32">
+                <label className="label text-xs">Round Name</label>
+                <input
+                  className="input !py-1.5 !text-sm"
+                  placeholder={`Round ${semRounds.length + 1}`}
+                  value={newRoundName}
+                  onChange={e => setNewRoundName(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 min-w-40">
+                <label className="label text-xs">Deadline</label>
+                <DatePicker
+                  selected={newRoundDeadline}
+                  onChange={date => setNewRoundDeadline(date)}
+                  showTimeSelect
+                  timeIntervals={15}
+                  dateFormat="MM/dd/yyyy h:mm aa"
+                  placeholderText="Pick deadline"
+                  className="input !py-1.5 !text-sm w-full"
+                  minDate={new Date()}
+                  withPortal
+                />
+              </div>
+              <button
+                onClick={() => createRound(s.id)}
+                disabled={savingRound || !newRoundDeadline}
+                className="btn-primary text-xs py-1.5"
+              >
+                {savingRound ? '…' : 'Create'}
+              </button>
+              <button onClick={() => setCreatingRoundFor(null)} className="btn-secondary text-xs py-1.5">Cancel</button>
+            </div>
+          )}
+        </div>
+
       </div>
     )
   }
@@ -337,5 +448,9 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { redirect, supabase } = await requireAdmin(ctx)
   if (redirect) return { redirect }
   const { data: semesters } = await supabase.from('semesters').select('*').order('created_at', { ascending: false })
-  return { props: { semesters: semesters ?? [] } }
+  const semesterIds = (semesters ?? []).map((s: any) => s.id)
+  const { data: rounds } = semesterIds.length
+    ? await supabase.from('semester_rounds').select('*').in('semester_id', semesterIds).order('round_number', { ascending: true })
+    : { data: [] }
+  return { props: { semesters: semesters ?? [], rounds: rounds ?? [] } }
 }

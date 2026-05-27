@@ -31,10 +31,46 @@ export type Submission = {
   photo_phash: string | null
   duplicate_flag: boolean
   admin_notes: string | null
+  course_grades: Record<string, string> | null
+  round_id: string | null
   submitted_at: string
   reviewed_at: string | null
   profiles?: Profile
   semesters?: Semester
+}
+
+export type SemesterRound = {
+  id: string
+  semester_id: string
+  round_number: number
+  name: string
+  deadline: string
+  is_active: boolean
+  created_at: string
+}
+
+export type MemberCourse = {
+  id: string
+  member_id: string
+  semester_id: string
+  course_id: string
+  course_name: string
+  credits: number
+  status: 'active' | 'dropped'
+  dropped_at: string | null
+  created_at: string
+}
+
+export type DropAlert = {
+  id: string
+  member_id: string
+  semester_id: string
+  course_id: string
+  course_name: string
+  credits: number
+  member_name: string
+  acknowledged: boolean
+  created_at: string
 }
 
 export type EmailLog = {

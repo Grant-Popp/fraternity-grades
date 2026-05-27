@@ -12,3 +12,15 @@ export async function getUserFromRequest(req: NextApiRequest) {
   const { data: { user } } = await supabaseAdmin.auth.getUser(token)
   return user ?? null
 }
+
+export async function requireAdminFromRequest(req: NextApiRequest) {
+  const user = await getUserFromRequest(req)
+  if (!user) return null
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (profile?.role !== 'admin') return null
+  return user
+}

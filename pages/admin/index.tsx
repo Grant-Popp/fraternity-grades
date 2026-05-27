@@ -8,6 +8,7 @@ interface Stats {
   totalMembers: number
   activeSubmissions: number
   pendingReview: number
+  dropAlerts: number
   chapterGpa: number | null
   reviewedCount: number
   byYear: Record<string, { count: number; avg: number | null }>
@@ -26,7 +27,7 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: 'Total Members', value: stats.totalMembers, icon: '👥', note: null },
-          { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0, note: null },
+          { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0, note: stats.dropAlerts > 0 ? `${stats.dropAlerts} drop alert${stats.dropAlerts !== 1 ? 's' : ''}` : null },
           { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa, note: stats.chapterGpa ? `${stats.reviewedCount} submitted grades` : null },
           { label: 'Active Semester', value: stats.activeSemester?.name ?? 'None', icon: '📅', small: true, note: null },
         ].map(s => (
@@ -140,8 +141,11 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { data: submissions } = await supabase.from('submissions').select('*')
 
   const activeSem = semesters?.[0] ?? null
+  const { data: dropAlertsData } = await supabase.from('drop_alerts').select('id').eq('acknowledged', false)
+
   const totalMembers = members?.length ?? 0
   const pendingReview = (submissions ?? []).filter(s => s.status === 'pending' && !s.no_grade).length
+  const dropAlerts = dropAlertsData?.length ?? 0
   const reviewed = (submissions ?? []).filter(s => s.final_gpa != null)
   const chapterGpa = reviewed.length ? reviewed.reduce((a, b) => a + (b.final_gpa ?? 0), 0) / reviewed.length : null
 
@@ -178,5 +182,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     total: totalMembers,
   } : null
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData } } }
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData } } }
 }

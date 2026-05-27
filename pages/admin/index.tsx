@@ -126,7 +126,6 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
             ))}
           </div>
         </div>
-        </div>
       </div>
     </AdminLayout>
   )

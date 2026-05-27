@@ -12,7 +12,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
   const [semesters, setSemesters] = useState(initial)
   const [formName, setFormName] = useState('')
   const [formDeadline, setFormDeadline] = useState<Date | null>(null)
-  const [formYears, setFormYears] = useState<string[]>(ALL_YEARS)
+  const [formYears, setFormYears] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
@@ -42,7 +42,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
     setSemesters(prev => [data.semester, ...prev])
     setFormName('')
     setFormDeadline(null)
-    setFormYears(ALL_YEARS)
+    setFormYears([])
     setCreating(false)
   }
 
@@ -287,10 +287,6 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
                   {yr}
                 </button>
               ))}
-              <button type="button" onClick={() => setFormYears(formYears.length === ALL_YEARS.length ? [] : ALL_YEARS)}
-                className="text-xs text-slate-500 hover:text-slate-300 ml-1">
-                {formYears.length === ALL_YEARS.length ? 'Deselect all' : 'Select all'}
-              </button>
             </div>
           </div>
           <button type="submit" className="btn-primary self-end" disabled={creating || formYears.length === 0}>

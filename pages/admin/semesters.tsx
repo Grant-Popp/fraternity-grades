@@ -130,6 +130,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
               onChange={date => setFormDeadline(date)}
               showTimeSelect
               timeIntervals={15}
+              injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}
               dateFormat="MM/dd/yyyy h:mm aa"
               placeholderText="Click to pick date & time"
               className="input w-full"
@@ -166,6 +167,7 @@ export default function SemestersPage({ semesters: initial }: { semesters: Semes
                         onChange={date => setEditDeadline(date)}
                         showTimeSelect
                         timeIntervals={15}
+                        injectTimes={[new Date(new Date().setHours(23, 59, 0, 0))]}
                         dateFormat="MM/dd/yyyy h:mm aa"
                         placeholderText="Pick new deadline"
                         className="input"

@@ -107,7 +107,7 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past, i
                     <p className="text-slate-400 text-sm">
                       Due: {new Date(entry.round.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
-                    <DeadlineCountdown deadline={entry.round.deadline} />
+                    {(!entry.submission || entry.submission.status === 'declined') && <DeadlineCountdown deadline={entry.round.deadline} />}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
@@ -133,7 +133,7 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past, i
                     <p className="text-slate-400 text-sm">
                       Due: {new Date(s.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
-                    <DeadlineCountdown deadline={s.deadline} />
+                    {(!s.submission || s.submission.status === 'declined') && <DeadlineCountdown deadline={s.deadline} />}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">

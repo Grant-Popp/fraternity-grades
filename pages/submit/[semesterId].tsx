@@ -30,6 +30,7 @@ interface OcrState {
   confidence: 'high' | 'medium' | 'low' | 'none'
   allGrades: string[]
   courseGrades: Record<string, string>
+  directGpa: number | null
 }
 
 export default function SubmitPage({ semester, alreadySubmitted, activeRound, memberCourses: initialCourses, declinedReason }: Props) {
@@ -187,9 +188,12 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           body: JSON.stringify({ semesterId: semester.id, courseId }),
         })
       }
+      // Mark dropped courses in local state
+      setCourses(prev => prev.map(c => pendingDrops.includes(c.course_id) ? { ...c, status: 'dropped' as const } : c))
+      setPendingDrops([])
     }
     if (showAddCourse && filledNew.length > 0) {
-      await fetch('/api/courses/save', {
+      const saveRes = await fetch('/api/courses/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -201,6 +205,24 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           })),
         }),
       })
+      if (saveRes.ok) {
+        // Append new courses to local state so they appear in the no-grade checkboxes
+        const now = new Date().toISOString()
+        const newEntries = filledNew.map((r, i) => ({
+          id: `temp-${Date.now()}-${i}`,
+          member_id: '',
+          semester_id: semester.id,
+          course_id: r.course_id.toUpperCase().trim(),
+          course_name: r.course_name.trim(),
+          credits: parseInt(r.credits),
+          status: 'active' as const,
+          dropped_at: null,
+          created_at: now,
+        }))
+        setCourses(prev => [...prev, ...newEntries])
+        setShowAddCourse(false)
+        setNewCourseRows([{ key: '1', course_id: '', course_name: '', credits: '' }])
+      }
     }
     setSavingDrops(false)
     setStep('choose')
@@ -229,7 +251,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     } catch {
       setOcrFailed(true)
       setLowQualityFlag(true)
-      setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [], courseGrades: {} })
+      setOcrState({ rawText: '', detectedGrade: null, gpa: null, confidence: 'none', allGrades: [], courseGrades: {}, directGpa: null })
     } finally {
       setOcrLoading(false)
       setStep('confirm')
@@ -246,6 +268,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', ocrState?.rawText ?? '')
     formData.append('ocrGrade', lowQualityFlag ? '' : selectedGrade)
+    if (ocrState?.directGpa != null) formData.append('directGpa', String(ocrState.directGpa))
     const mergedCourseGrades = { ...(ocrState?.courseGrades ?? {}) }
     Array.from(perCourseNoGrade).forEach(cid => { mergedCourseGrades[cid] = 'N/A' })
     formData.append('courseGrades', JSON.stringify(mergedCourseGrades))
@@ -647,6 +670,11 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 {lowQualityFlag ? (
                   <p className="text-amber-400 text-sm bg-amber-900/20 px-3 py-2 rounded-lg">
                     ⚠️ Flagged as unclear — the VP of Academics & Scholarship will review your photo manually.
+                  </p>
+                ) : ocrState?.directGpa != null ? (
+                  <p className="text-2xl font-bold text-white mt-1">
+                    {ocrState.directGpa.toFixed(2)}
+                    <span className="text-slate-400 text-base font-normal ml-2">GPA detected directly</span>
                   </p>
                 ) : selectedGrade ? (
                   <p className="text-2xl font-bold text-white mt-1">{selectedGrade} <span className="text-slate-400 text-base font-normal">({GRADE_MAP[selectedGrade]?.toFixed(1)} GPA pts)</span></p>

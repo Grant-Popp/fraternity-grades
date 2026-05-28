@@ -47,3 +47,18 @@ export function averageGpa(gpas: (number | null)[]): number | null {
   if (valid.length === 0) return null
   return valid.reduce((a, b) => a + b, 0) / valid.length
 }
+
+export function gpaToLetter(gpa: number): string {
+  if (gpa >= 3.85) return 'A'
+  if (gpa >= 3.5)  return 'A-'
+  if (gpa >= 3.15) return 'B+'
+  if (gpa >= 2.85) return 'B'
+  if (gpa >= 2.5)  return 'B-'
+  if (gpa >= 2.15) return 'C+'
+  if (gpa >= 1.85) return 'C'
+  if (gpa >= 1.5)  return 'C-'
+  if (gpa >= 1.15) return 'D+'
+  if (gpa >= 0.85) return 'D'
+  if (gpa >= 0.5)  return 'D-'
+  return 'F'
+}

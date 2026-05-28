@@ -91,13 +91,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Multipart path: photo submission
   const form = formidable({ maxFileSize: 5 * 1024 * 1024 })
-  const [fields, files] = await form.parse(req)
+  let fields: any, files: any
+  try {
+    const parsed = await form.parse(req)
+    fields = parsed[0]
+    files = parsed[1]
+  } catch {
+    return res.status(400).json({ error: 'Invalid upload. Please try again.' })
+  }
 
   const semesterId = Array.isArray(fields.semesterId) ? fields.semesterId[0] : fields.semesterId
   const roundId = Array.isArray(fields.roundId) ? fields.roundId[0] : fields.roundId ?? null
   const ocrRawText = Array.isArray(fields.ocrRawText) ? fields.ocrRawText[0] : fields.ocrRawText ?? ''
   const ocrGrade = Array.isArray(fields.ocrGrade) ? fields.ocrGrade[0] : fields.ocrGrade ?? ''
   const courseGradesRaw = Array.isArray(fields.courseGrades) ? fields.courseGrades[0] : fields.courseGrades ?? '{}'
+  const directGpaRaw = Array.isArray(fields.directGpa) ? fields.directGpa[0] : fields.directGpa ?? ''
   const imageFile = Array.isArray(files.file) ? files.file[0] : files.file
 
   let courseGradesData: Record<string, string> = {}
@@ -147,12 +155,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'File could not be read. Please try again.' })
   }
 
-  // EXIF timestamp check — rejects old photos reused from previous semesters.
-  // Phones embed DateTimeOriginal in JPEGs; screenshots typically have no EXIF.
-  // If EXIF is absent we allow the submission (screenshot workflow).
+  // Declare anti-cheat flags early so all checks below can set them
+  let photo_phash: string | null = null
+  let duplicate_flag = false
+
+  // ── Anti-cheat 1: EXIF analysis ──────────────────────────────
+  // Camera photos (phones) embed EXIF; screenshots typically don't.
+  // Catches: old photos re-used from prior semesters, image-editing software.
   try {
     const ExifReader = (await import('exifreader')).default
     const tags = ExifReader.load(fileBuffer)
+
+    // Photo age — reject camera shots taken more than 45 days ago
     const dateTag = (tags as any)['DateTimeOriginal'] ?? (tags as any)['DateTime']
     if (dateTag?.description) {
       const exifDate = (dateTag.description as string).replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
@@ -164,8 +178,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
     }
+
+    // Editing software — Photoshop/GIMP/Lightroom in EXIF means the image was modified
+    const softwareTag = (tags as any)['Software']
+    if (softwareTag?.description) {
+      const sw = (softwareTag.description as string).toLowerCase()
+      const editingTools = ['photoshop', 'gimp', 'lightroom', 'affinity', 'paint.net', 'pixelmator', 'snapseed', 'vsco']
+      if (editingTools.some(t => sw.includes(t))) duplicate_flag = true
+    }
   } catch {
-    // EXIF parse failure — proceed without date check
+    // EXIF parse failure — no EXIF data (normal for screenshots)
   }
 
   const ext = imageFile.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -177,46 +199,69 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
-  // Compute perceptual hash for duplicate detection
-  // Checks both: same member re-using an old photo, AND two members submitting identical photos
-  let photo_phash: string | null = null
-  let duplicate_flag = false
+  // ── Anti-cheat 2: Perceptual hash ────────────────────────────
+  // Catches identical or near-identical images reused across submissions.
   try {
     photo_phash = await computePhash(fileBuffer)
-    const hashQuery = supabaseAdmin
-      .from('submissions')
-      .select('photo_phash')
-      .not('photo_phash', 'is', null)
-    // Scope to this round or semester so we only compare within the same submission window
-    const scoped = roundId
-      ? hashQuery.eq('round_id', roundId)
-      : hashQuery.eq('semester_id', semesterId)
+    const hashQuery = supabaseAdmin.from('submissions').select('photo_phash').not('photo_phash', 'is', null)
+    const scoped = roundId ? hashQuery.eq('round_id', roundId) : hashQuery.eq('semester_id', semesterId)
     const { data: scopedSubs } = await scoped
-    // Also check this member's own history across all semesters
-    const { data: ownSubs } = await supabaseAdmin
-      .from('submissions')
-      .select('photo_phash')
-      .eq('member_id', user.id)
-      .not('photo_phash', 'is', null)
+    const { data: ownSubs } = await supabaseAdmin.from('submissions').select('photo_phash').eq('member_id', user.id).not('photo_phash', 'is', null)
     const allHashes = [
       ...(scopedSubs ?? []).map((s: any) => s.photo_phash),
       ...(ownSubs ?? []).map((s: any) => s.photo_phash),
     ].filter(Boolean) as string[]
-    duplicate_flag = isDuplicate(photo_phash, allHashes)
+    if (isDuplicate(photo_phash, allHashes)) duplicate_flag = true
   } catch {}
 
-  // Name cross-reference: member's last name should appear in OCR text
-  // Flags if the screenshot appears to belong to a different person
+  // ── Anti-cheat 3: Identity checks ───────────────────────────
+  // Require the member's name to appear in the OCR text (flags someone else's screenshot).
+  // Require at least half of their registered courses to appear (catches wrong-semester screenshots).
   const { data: memberProfile } = await supabaseAdmin.from('profiles').select('full_name,email').eq('id', user.id).single()
-  if (!duplicate_flag && memberProfile?.full_name && ocrRawText) {
-    const parts = memberProfile.full_name.trim().toLowerCase().split(/\s+/)
-    const lastName = parts[parts.length - 1]
-    if (lastName.length > 2 && !ocrRawText.toLowerCase().includes(lastName)) {
-      duplicate_flag = true
+
+  if (memberProfile?.full_name && ocrRawText) {
+    const nameParts = memberProfile.full_name.trim().toLowerCase().split(/\s+/)
+    const firstName = nameParts[0]
+    const lastName = nameParts[nameParts.length - 1]
+    const ocrLower = ocrRawText.toLowerCase()
+    const hasFirst = firstName.length > 2 && ocrLower.includes(firstName)
+    const hasLast = lastName.length > 2 && ocrLower.includes(lastName)
+    if (!hasFirst && !hasLast) duplicate_flag = true
+  }
+
+  // Course ID cross-reference — member's registered course IDs should appear in the OCR text.
+  // If they have 3+ courses and none show up, it's almost certainly not their grades page.
+  if (!duplicate_flag && ocrRawText && ocrRawText.length > 80) {
+    const { data: memberCourses } = await supabaseAdmin
+      .from('member_courses').select('course_id')
+      .eq('member_id', user.id).eq('semester_id', semesterId).eq('status', 'active')
+    if (memberCourses && memberCourses.length >= 3) {
+      const ocrUpper = ocrRawText.toUpperCase().replace(/\s+/g, ' ')
+      const matched = memberCourses.filter(c => {
+        const norm = c.course_id.replace(/\s+/g, ' ').toUpperCase()
+        const compact = c.course_id.replace(/\s+/g, '').toUpperCase()
+        return ocrUpper.includes(norm) || ocrUpper.includes(compact)
+      })
+      if (matched.length === 0) duplicate_flag = true
     }
   }
 
-  const ocrGpa = ocrGrade ? gradeToGpa(ocrGrade) : null
+  // ── Anti-cheat 4: Grade portal keyword check ─────────────────
+  // If substantial OCR text was returned but contains no academic keywords,
+  // the screenshot probably isn't from a grade portal.
+  if (!duplicate_flag && ocrRawText && ocrRawText.length > 100) {
+    const ocrLower = ocrRawText.toLowerCase()
+    const portalKeywords = ['grade', 'gpa', 'credit', 'course', 'points', 'blackboard', 'canvas',
+      'moodle', 'banner', 'semester', 'enrolled', 'gradebook', 'cumulative', 'academic', 'transcript']
+    const kwHits = portalKeywords.filter(kw => ocrLower.includes(kw)).length
+    if (kwHits < 2) duplicate_flag = true
+  }
+
+  // Use directGpa (precise numeric) if OCR detected it; otherwise convert from letter grade
+  const directGpaVal = directGpaRaw ? parseFloat(directGpaRaw) : NaN
+  const ocrGpa = (!isNaN(directGpaVal) && directGpaVal >= 0 && directGpaVal <= 4.0)
+    ? directGpaVal
+    : (ocrGrade ? gradeToGpa(ocrGrade) : null)
 
   const { error: insertError } = await supabaseAdmin.from('submissions').insert({
     member_id: user.id,

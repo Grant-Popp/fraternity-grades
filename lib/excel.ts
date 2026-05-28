@@ -173,18 +173,38 @@ export async function generateExcel(
 
   // ── Summary Sheet ──────────────────────────────────────────
   {
+    const roundMap = new Map<string, string>()
+    rounds?.forEach(r => roundMap.set(r.id, r.name))
+    const hasRounds = (rounds?.length ?? 0) > 0
+
     const ws = workbook.addWorksheet('Summary')
-    ws.columns = [
-      { key: 'name',      width: 24 },
-      { key: 'email',     width: 28 },
-      { key: 'year',      width: 14 },
-      { key: 'gpa',       width: 10 },
-      { key: 'status',    width: 14 },
-      { key: 'submitted', width: 22 },
-    ]
+    // Column layout varies based on whether this semester uses rounds
+    if (hasRounds) {
+      ws.columns = [
+        { key: 'name',      width: 24 },
+        { key: 'email',     width: 28 },
+        { key: 'year',      width: 14 },
+        { key: 'round',     width: 14 },
+        { key: 'gpa',       width: 10 },
+        { key: 'status',    width: 14 },
+        { key: 'submitted', width: 22 },
+      ]
+    } else {
+      ws.columns = [
+        { key: 'name',      width: 24 },
+        { key: 'email',     width: 28 },
+        { key: 'year',      width: 14 },
+        { key: 'gpa',       width: 10 },
+        { key: 'status',    width: 14 },
+        { key: 'submitted', width: 22 },
+      ]
+    }
+
+    const colCount = hasRounds ? 7 : 6
+    const lastCol = String.fromCharCode(64 + colCount) // A=65, so col 7 = G
 
     // Title
-    ws.mergeCells('A1:F1')
+    ws.mergeCells(`A1:${lastCol}1`)
     const title = ws.getCell('A1')
     title.value = `Chapter Grade Report — ${semester.name}`
     title.font = { bold: true, size: 14, color: { argb: DARK_NAVY } }
@@ -192,43 +212,57 @@ export async function generateExcel(
     title.alignment = { horizontal: 'center', vertical: 'middle' }
     ws.getRow(1).height = 30
 
-    ws.mergeCells('A2:F2')
+    ws.mergeCells(`A2:${lastCol}2`)
     ws.getCell('A2').value = `Deadline: ${new Date(semester.deadline).toLocaleString()}  |  Generated: ${new Date().toLocaleString()}`
     ws.getCell('A2').font = { italic: true, color: { argb: 'FF64748B' }, size: 10 }
     ws.getCell('A2').alignment = { horizontal: 'center' }
 
-    headerRow(ws, ['Member Name', 'Email', 'Class Year', 'GPA', 'Status', 'Submitted At'], 3)
+    const headers = hasRounds
+      ? ['Member Name', 'Email', 'Class Year', 'Round', 'GPA', 'Status', 'Submitted At']
+      : ['Member Name', 'Email', 'Class Year', 'GPA', 'Status', 'Submitted At']
+    headerRow(ws, headers, 3)
 
     sorted.forEach((m, i) => {
       const sub = subByMember.get(m.id)
       const gpa = sub?.final_gpa ?? null
       const row = ws.getRow(4 + i)
 
-      row.getCell(1).value = m.full_name
-      row.getCell(2).value = m.email
-      row.getCell(3).value = m.class_year
-      row.getCell(4).value = gpa !== null ? +gpa.toFixed(2) : '—'
-      row.getCell(5).value = sub?.status ?? 'Not Submitted'
-      row.getCell(6).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
-
-      const gpaCell = row.getCell(4)
-      if (gpa !== null) {
-        gpaCell.fill = gpaFill(gpa)!
-        gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true }
-      }
-      gpaCell.alignment = { horizontal: 'center' }
-      row.getCell(3).alignment = { horizontal: 'center' }
-      row.getCell(5).alignment = { horizontal: 'center' }
-      row.getCell(6).alignment = { horizontal: 'center' }
-
-      if (i % 2 === 0) {
-        [1,2,3,5,6].forEach(c => {
-          row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
-        })
+      if (hasRounds) {
+        const roundName = sub?.round_id ? (roundMap.get(sub.round_id) ?? '—') : (sub ? '—' : '')
+        row.getCell(1).value = m.full_name
+        row.getCell(2).value = m.email
+        row.getCell(3).value = m.class_year
+        row.getCell(4).value = roundName
+        row.getCell(5).value = gpa !== null ? +gpa.toFixed(2) : '—'
+        row.getCell(6).value = sub?.status ?? 'Not Submitted'
+        row.getCell(7).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
+        const gpaCell = row.getCell(5)
+        if (gpa !== null) { gpaCell.fill = gpaFill(gpa)!; gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true } }
+        gpaCell.alignment = { horizontal: 'center' }
+        row.getCell(3).alignment = { horizontal: 'center' }
+        row.getCell(4).alignment = { horizontal: 'center' }
+        row.getCell(6).alignment = { horizontal: 'center' }
+        row.getCell(7).alignment = { horizontal: 'center' }
+        if (i % 2 === 0) [1,2,3,4,6,7].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } } })
+      } else {
+        row.getCell(1).value = m.full_name
+        row.getCell(2).value = m.email
+        row.getCell(3).value = m.class_year
+        row.getCell(4).value = gpa !== null ? +gpa.toFixed(2) : '—'
+        row.getCell(5).value = sub?.status ?? 'Not Submitted'
+        row.getCell(6).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
+        const gpaCell = row.getCell(4)
+        if (gpa !== null) { gpaCell.fill = gpaFill(gpa)!; gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true } }
+        gpaCell.alignment = { horizontal: 'center' }
+        row.getCell(3).alignment = { horizontal: 'center' }
+        row.getCell(5).alignment = { horizontal: 'center' }
+        row.getCell(6).alignment = { horizontal: 'center' }
+        if (i % 2 === 0) [1,2,3,5,6].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } } })
       }
     })
 
-    // Chapter averages
+    // Chapter averages footer
+    const gpaCol = hasRounds ? 5 : 4
     const gpas = sorted.map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((g): g is number => g !== null)
     const chapterAvg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
     const afterData = 4 + sorted.length + 1
@@ -236,9 +270,9 @@ export async function generateExcel(
     const avgRow = ws.getRow(afterData)
     avgRow.getCell(1).value = 'Chapter Average'
     avgRow.getCell(1).font = { bold: true }
-    avgRow.getCell(4).value = chapterAvg !== null ? +chapterAvg.toFixed(2) : '—'
-    avgRow.getCell(4).font = { bold: true }
-    avgRow.getCell(4).fill = gpaFill(chapterAvg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+    avgRow.getCell(gpaCol).value = chapterAvg !== null ? +chapterAvg.toFixed(2) : '—'
+    avgRow.getCell(gpaCol).font = { bold: true }
+    avgRow.getCell(gpaCol).fill = gpaFill(chapterAvg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
 
     const years = ['Freshman','Sophomore','Junior','Senior'] as const
     years.forEach((yr, yi) => {
@@ -250,8 +284,8 @@ export async function generateExcel(
       const r = ws.getRow(afterData + 1 + yi)
       r.getCell(1).value = `${yr} Average`
       r.getCell(1).font = { italic: true }
-      r.getCell(4).value = avg !== null ? +avg.toFixed(2) : '—'
-      r.getCell(4).fill = gpaFill(avg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+      r.getCell(gpaCol).value = avg !== null ? +avg.toFixed(2) : '—'
+      r.getCell(gpaCol).fill = gpaFill(avg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
     })
 
     ws.views = [{ state: 'frozen', ySplit: 3 }]

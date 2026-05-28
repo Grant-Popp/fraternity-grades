@@ -30,9 +30,11 @@ export default function Layout({ children, title }: LayoutProps) {
             <span className="text-amber-500 font-bold text-lg">📚 Grade Portal</span>
           </Link>
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className={`text-sm ${router.pathname === '/dashboard' ? 'text-amber-400 font-semibold' : 'text-slate-300 hover:text-white'}`}>
-              Dashboard
-            </Link>
+            {router.pathname === '/dashboard' ? (
+              <span className="text-sm text-amber-400 font-semibold">Dashboard</span>
+            ) : (
+              <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
+            )}
             <span className="text-slate-500 text-xs">{email}</span>
             <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-red-400 transition-colors">
               Sign Out

@@ -52,11 +52,17 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   const [savingCourses, setSavingCourses] = useState(false)
 
   // Course review / drop state
+  const [courses, setCourses] = useState(initialCourses)
   const [pendingDrops, setPendingDrops] = useState<string[]>([])
   const [savingDrops, setSavingDrops] = useState(false)
   const [showAddCourse, setShowAddCourse] = useState(false)
   const [newCourseRows, setNewCourseRows] = useState<CourseRow[]>([{ key: '1', course_id: '', course_name: '', credits: '' }])
   const [addCourseError, setAddCourseError] = useState('')
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState({ course_id: '', course_name: '', credits: '' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   // Photo/OCR state
   const [file, setFile] = useState<File | null>(null)
@@ -127,6 +133,35 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       `Mark ${courseId} — ${courseName} as dropped?\n\nThe VP of Academics & Scholarship will be notified. This cannot be undone.`
     )) return
     setPendingDrops(prev => [...prev, courseId])
+  }
+
+  const startEdit = (c: typeof courses[0]) => {
+    setEditingId(c.id)
+    setEditValues({ course_id: c.course_id, course_name: c.course_name, credits: String(c.credits) })
+    setEditError('')
+  }
+
+  const saveEdit = async () => {
+    if (!editingId) return
+    setEditError('')
+    const cr = parseInt(editValues.credits)
+    if (!editValues.course_id.trim()) { setEditError('Course ID required.'); return }
+    if (!editValues.course_name.trim()) { setEditError('Course name required.'); return }
+    if (isNaN(cr) || cr < 1 || cr > 6) { setEditError('Credits must be 1–6.'); return }
+    setEditSaving(true)
+    const res = await fetch('/api/courses/update', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberCourseId: editingId, course_id: editValues.course_id, course_name: editValues.course_name, credits: cr }),
+    })
+    const data = await res.json()
+    if (!res.ok) { setEditError(data.error ?? 'Failed to save.'); setEditSaving(false); return }
+    setCourses(prev => prev.map(c => c.id === editingId
+      ? { ...c, course_id: editValues.course_id.toUpperCase().trim(), course_name: editValues.course_name.trim(), credits: cr }
+      : c
+    ))
+    setEditingId(null)
+    setEditSaving(false)
   }
 
   const handleContinueFromReview = async () => {
@@ -399,12 +434,53 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
               Review your course list. If you&apos;ve dropped a class since last round, mark it here.
             </p>
             <div className="space-y-2 mb-5">
-              {initialCourses.map(c => {
+              {courses.map(c => {
                 const alreadyDropped = c.status === 'dropped'
                 const pendingDrop = pendingDrops.includes(c.course_id)
                 const isDropped = alreadyDropped || pendingDrop
+                const isEditing = editingId === c.id
+
+                if (isEditing) {
+                  return (
+                    <div key={c.id} className="border border-amber-500/40 bg-slate-800/60 rounded-lg px-3 py-3">
+                      <div className="grid grid-cols-[1fr_2fr_60px] gap-2 mb-2">
+                        <input
+                          className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                          placeholder="ENGR 110"
+                          value={editValues.course_id}
+                          onChange={e => setEditValues(v => ({ ...v, course_id: e.target.value }))}
+                        />
+                        <input
+                          className="input !py-1.5 !text-sm"
+                          placeholder="Course Name"
+                          value={editValues.course_name}
+                          onChange={e => setEditValues(v => ({ ...v, course_name: e.target.value }))}
+                        />
+                        <input
+                          className="input !py-1.5 !text-sm text-center"
+                          placeholder="3"
+                          type="number"
+                          min={1}
+                          max={6}
+                          value={editValues.credits}
+                          onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
+                        />
+                      </div>
+                      {editError && <p className="text-red-400 text-xs mb-2">{editError}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={saveEdit} disabled={editSaving} className="btn-primary text-xs py-1 px-3">
+                          {editSaving ? 'Saving…' : 'Save'}
+                        </button>
+                        <button onClick={() => { setEditingId(null); setEditError('') }} className="btn-secondary text-xs py-1 px-3">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+
                 return (
-                  <div key={c.course_id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${
+                  <div key={c.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border ${
                     isDropped ? 'border-red-800/40 bg-red-900/10' : 'border-slate-700 bg-slate-800/40'
                   }`}>
                     <div className="flex-1 min-w-0 mr-3">
@@ -424,12 +500,20 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                         >Undo</button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => toggleDrop(c.course_id, c.course_name)}
-                        className="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0"
-                      >
-                        Mark as dropped
-                      </button>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button
+                          onClick={() => startEdit(c)}
+                          className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => toggleDrop(c.course_id, c.course_name)}
+                          className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+                        >
+                          Mark as dropped
+                        </button>
+                      </div>
                     )}
                   </div>
                 )

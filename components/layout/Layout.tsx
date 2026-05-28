@@ -35,7 +35,12 @@ export default function Layout({ children, title }: LayoutProps) {
             ) : (
               <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
             )}
-            <span className="text-slate-500 text-xs">{email}</span>
+            {router.pathname === '/profile' ? (
+              <span className="text-sm text-amber-400 font-semibold">Profile</span>
+            ) : (
+              <Link href="/profile" className="text-sm text-slate-300 hover:text-white">Profile</Link>
+            )}
+            <span className="text-slate-500 text-xs hidden sm:inline">{email}</span>
             <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-red-400 transition-colors">
               Sign Out
             </button>

@@ -20,6 +20,37 @@ interface Props {
 export default function MemberDetailPage({ member: initialMember, submissions, semesters }: Props) {
   const [member, setMember] = useState(initialMember)
   const [savingRole, setSavingRole] = useState(false)
+  const [notes, setNotes] = useState((initialMember as any).admin_notes ?? '')
+  const [savingNotes, setSavingNotes] = useState(false)
+  const [notesSaved, setNotesSaved] = useState(false)
+  const [strikeSaving, setStrikeSaving] = useState(false)
+
+  const strikes: number = (member as any).strikes ?? 0
+  const strikeColor = strikes === 0 ? 'text-green-400' : strikes === 1 ? 'text-yellow-400' : strikes === 2 ? 'text-orange-400' : 'text-red-400'
+
+  const saveNotes = async () => {
+    setSavingNotes(true)
+    setNotesSaved(false)
+    await fetch('/api/members/update-notes', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: member.id, adminNotes: notes }),
+    })
+    setSavingNotes(false)
+    setNotesSaved(true)
+  }
+
+  const adjustStrikes = async (action: 'add' | 'remove' | 'reset') => {
+    setStrikeSaving(true)
+    const res = await fetch('/api/members/log-strike', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: member.id, action }),
+    })
+    const data = await res.json()
+    if (res.ok) setMember(prev => ({ ...prev, strikes: data.strikes } as any))
+    setStrikeSaving(false)
+  }
 
   const reviewed = submissions.filter(s => s.final_gpa != null)
   const avgGpa = reviewed.length
@@ -66,6 +97,53 @@ export default function MemberDetailPage({ member: initialMember, submissions, s
               {avgGpa != null ? avgGpa.toFixed(2) : '—'}
             </p>
             <p className="text-slate-500 text-xs mt-0.5">{reviewed.length} graded submission{reviewed.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Strikes & admin notes */}
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="card">
+          <h3 className="font-semibold text-white mb-3">Missed Submission Strikes</h3>
+          <div className="flex items-center gap-4 mb-4">
+            <span className={`font-bold text-5xl ${strikeColor}`}>{strikes}</span>
+            <div>
+              <p className="text-slate-400 text-xs">out of 3</p>
+              {strikes === 0 && <p className="text-green-400 text-xs mt-0.5">Good standing</p>}
+              {strikes >= 3 && <p className="text-red-400 text-xs font-semibold mt-0.5">Max strikes reached</p>}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => adjustStrikes('add')} disabled={strikeSaving}
+              className="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded border border-red-800/40 transition-colors">
+              + Strike
+            </button>
+            <button onClick={() => adjustStrikes('remove')} disabled={strikeSaving || strikes === 0}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded transition-colors disabled:opacity-40">
+              − Strike
+            </button>
+            <button onClick={() => adjustStrikes('reset')} disabled={strikeSaving || strikes === 0}
+              className="text-xs text-slate-500 hover:text-slate-300 underline ml-1 transition-colors disabled:opacity-40">
+              Reset
+            </button>
+          </div>
+        </div>
+        <div className="card">
+          <h3 className="font-semibold text-white mb-3">Admin Notes <span className="text-slate-500 font-normal text-xs">(private)</span></h3>
+          <textarea
+            className="input w-full resize-none"
+            rows={3}
+            placeholder="Notes visible only to admins…"
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            maxLength={1000}
+          />
+          <div className="flex items-center gap-3 mt-2">
+            <button onClick={saveNotes} disabled={savingNotes} className="btn-primary text-xs py-1.5 px-3">
+              {savingNotes ? 'Saving…' : 'Save'}
+            </button>
+            {notesSaved && <span className="text-green-400 text-xs">✓ Saved</span>}
+            <span className="text-slate-600 text-xs ml-auto">{notes.length}/1000</span>
           </div>
         </div>
       </div>

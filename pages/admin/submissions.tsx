@@ -150,6 +150,8 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [loadingPhoto, setLoadingPhoto] = useState<string | null>(null)
+  const [bulkApproving, setBulkApproving] = useState(false)
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
 
   const acknowledgeAlert = async (alertId: string) => {
     await fetch('/api/drops/acknowledge', {
@@ -192,6 +194,32 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
     setSubs(prev => prev.map(s => s.id === id ? { ...s, status: 'declined' } : s))
   }
 
+  const bulkApprove = async () => {
+    if (filterSem === 'all') return
+    const pendingCount = filtered.filter(s => s.status === 'pending' && !s.no_grade && !s.duplicate_flag).length
+    if (pendingCount === 0) { setBulkResult('No eligible submissions to approve.'); return }
+    if (!window.confirm(`Approve ${pendingCount} pending, non-flagged submissions using their OCR GPA?`)) return
+    setBulkApproving(true)
+    setBulkResult(null)
+    const res = await fetch('/api/submissions/bulk-approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semesterId: filterSem }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setSubs(prev => prev.map(s =>
+        s.semester_id === filterSem && s.status === 'pending' && !s.no_grade && !s.duplicate_flag && s.ocr_gpa != null
+          ? { ...s, status: 'reviewed', admin_gpa: s.ocr_gpa, final_gpa: s.ocr_gpa }
+          : s
+      ))
+      setBulkResult(`✓ Approved ${data.approved} submissions`)
+    } else {
+      setBulkResult(`Error: ${data.error}`)
+    }
+    setBulkApproving(false)
+  }
+
   return (
     <AdminLayout title="Submissions">
       {/* Drop alerts */}
@@ -219,7 +247,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <select className="input !w-auto" value={filterSem} onChange={e => setFilterSem(e.target.value)}>
+        <select className="input !w-auto" value={filterSem} onChange={e => { setFilterSem(e.target.value); setBulkResult(null) }}>
           <option value="all">All Semesters</option>
           {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -235,6 +263,19 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
           {['Freshman','Sophomore','Junior','Senior'].map(yr => <option key={yr}>{yr}</option>)}
         </select>
         <span className="text-slate-400 text-sm self-center">{filtered.length} results</span>
+        {filterSem !== 'all' && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={bulkApprove}
+              disabled={bulkApproving}
+              className="text-xs bg-green-800 hover:bg-green-700 text-white px-3 py-1.5 rounded transition-colors disabled:opacity-60"
+              title="Approve all pending, non-flagged submissions using their OCR GPA"
+            >
+              {bulkApproving ? '…' : '✓ Bulk Approve'}
+            </button>
+            {bulkResult && <span className={`text-xs ${bulkResult.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{bulkResult}</span>}
+          </div>
+        )}
       </div>
 
       {/* Table */}

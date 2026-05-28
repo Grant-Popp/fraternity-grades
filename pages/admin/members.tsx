@@ -8,6 +8,7 @@ import type { Profile } from '@/lib/database.types'
 interface MemberRow extends Profile {
   submissionCount: number
   latestGpa: number | null
+  strikes: number
 }
 
 export default function MembersPage({ members: initial }: { members: MemberRow[] }) {
@@ -37,7 +38,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-900/60 border-b border-slate-700">
-              {['Name','Email','Class Year','Major','Submissions','Latest GPA','Role','Actions'].map(h => (
+              {['Name','Email','Year','Major','Subs','Latest GPA','Strikes','Role',''].map(h => (
                 <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium">{h}</th>
               ))}
             </tr>
@@ -46,14 +47,21 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
             {filtered.map(m => (
               <tr key={m.id} className="border-b border-slate-700/50 hover:bg-slate-700/10">
                 <td className="px-4 py-3 text-white font-medium">{m.full_name}</td>
-                <td className="px-4 py-3 text-slate-400">{m.email}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs">{m.email}</td>
                 <td className="px-4 py-3 text-slate-300">{m.class_year}</td>
-                <td className="px-4 py-3 text-slate-400">{m.major ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs">{m.major ?? '—'}</td>
                 <td className="px-4 py-3 text-center text-slate-300">{m.submissionCount}</td>
                 <td className="px-4 py-3 text-center">
                   {m.latestGpa != null
                     ? <span className={`font-semibold ${m.latestGpa >= 3.0 ? 'text-green-400' : m.latestGpa >= 2.0 ? 'text-yellow-400' : 'text-red-400'}`}>{m.latestGpa.toFixed(2)}</span>
                     : <span className="text-slate-500">—</span>}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  {m.strikes > 0
+                    ? <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${m.strikes >= 3 ? 'text-red-400 bg-red-900/30' : m.strikes === 2 ? 'text-orange-400 bg-orange-900/20' : 'text-yellow-400 bg-yellow-900/20'}`}>
+                        {m.strikes}
+                      </span>
+                    : <span className="text-slate-600 text-xs">0</span>}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${m.role === 'admin' ? 'bg-amber-900 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>
@@ -93,6 +101,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       ...p,
       submissionCount: subs.length,
       latestGpa: latestSub?.final_gpa ?? null,
+      strikes: (p as any).strikes ?? 0,
     }
   })
 

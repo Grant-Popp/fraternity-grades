@@ -16,9 +16,10 @@ interface Stats {
   reviewedCount: number
   byYear: Record<string, { count: number; avg: number | null }>
   byMajor: { major: string; count: number; avg: number | null }[]
-  activeSemester: { id: string; name: string; deadline: string; submitted: number; total: number } | null
+  activeSemester: { id: string; name: string; deadline: string; submitted: number; total: number; complianceRate: number } | null
   gpaThreshold: number
   atRiskMembers: AtRiskMember[]
+  totalStrikes: number
 }
 
 export default function AdminDashboard({ stats }: { stats: Stats }) {
@@ -62,12 +63,13 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
   return (
     <AdminLayout title="Dashboard">
       {/* Top stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         {[
           { label: 'Total Members', value: stats.totalMembers, icon: '👥', note: null },
           { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0, note: stats.dropAlerts > 0 ? `${stats.dropAlerts} drop alert${stats.dropAlerts !== 1 ? 's' : ''}` : null },
           { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa, note: stats.chapterGpa ? `${stats.reviewedCount} submitted grades` : null },
           { label: 'Active Semester', value: stats.activeSemester?.name ?? 'None', icon: '📅', small: true, note: null },
+          { label: 'Total Strikes', value: stats.totalStrikes, icon: '⚡', alert: stats.totalStrikes > 0, note: stats.totalStrikes > 0 ? 'across all members' : null },
         ].map(s => (
           <div key={s.label} className={`card !p-4 ${s.alert ? 'border-amber-500' : ''}`}>
             <p className="text-2xl mb-1">{s.icon}</p>
@@ -95,7 +97,12 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
               {stats.activeSemester.submitted}/{stats.activeSemester.total} ({submitRate}%)
             </span>
           </div>
-          <p className="text-slate-400 text-xs">Deadline: {new Date(stats.activeSemester.deadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+          <div className="flex items-center justify-between text-xs">
+            <p className="text-slate-400">Deadline: {new Date(stats.activeSemester.deadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+            <p className="text-slate-500">
+              Compliance rate: <span className={`font-semibold ${stats.activeSemester.complianceRate >= 80 ? 'text-green-400' : stats.activeSemester.complianceRate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{stats.activeSemester.complianceRate}%</span>
+            </p>
+          </div>
         </div>
       )}
 
@@ -219,7 +226,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { redirect, supabase } = await requireAdmin(ctx)
   if (redirect) return { redirect }
 
-  const { data: members } = await supabase.from('profiles').select('id,full_name,class_year,major').eq('role', 'member')
+  const { data: members } = await supabase.from('profiles').select('id,full_name,class_year,major,strikes').eq('role', 'member')
   const { data: semesters } = await supabase.from('semesters').select('*').eq('is_active', true).order('created_at', { ascending: false })
   const { data: submissions } = await supabase.from('submissions').select('*')
 
@@ -259,11 +266,15 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     }
   }).sort((a, b) => a.major.localeCompare(b.major))
 
+  const activeSemSubmitted = activeSem ? (submissions ?? []).filter(s => s.semester_id === activeSem.id).length : 0
   const activeSemesterData = activeSem ? {
     id: activeSem.id, name: activeSem.name, deadline: activeSem.deadline,
-    submitted: (submissions ?? []).filter(s => s.semester_id === activeSem.id).length,
+    submitted: activeSemSubmitted,
     total: totalMembers,
+    complianceRate: totalMembers > 0 ? Math.round((activeSemSubmitted / totalMembers) * 100) : 0,
   } : null
+
+  const totalStrikes = (members ?? []).reduce((sum: number, m: any) => sum + (m.strikes ?? 0), 0)
 
   // Load GPA threshold
   let gpaThreshold = 2.5
@@ -283,5 +294,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     return [{ id: m.id, name: (m as any).full_name ?? 'Unknown', gpa: latest.final_gpa }]
   }).sort((a, b) => a.gpa - b.gpa)
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData, gpaThreshold, atRiskMembers } } }
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData, gpaThreshold, atRiskMembers, totalStrikes } } }
 }

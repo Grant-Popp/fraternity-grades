@@ -305,6 +305,60 @@ export async function generateExcel(
     }
   }
 
+  // ── By Major Sheet ────────────────────────────────────────
+  {
+    const ws = workbook.addWorksheet('By Major')
+    ws.columns = [{ key: 'name', width: 24 }, { key: 'gpa', width: 10 }, { key: 'status', width: 14 }]
+
+    const majorGroups: Map<string, typeof members> = new Map()
+    for (const m of sorted) {
+      const key = m.major?.trim() || 'No Major Listed'
+      if (!majorGroups.has(key)) majorGroups.set(key, [])
+      majorGroups.get(key)!.push(m)
+    }
+
+    let currentRow = 1
+    for (const [major, group] of Array.from(majorGroups.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+      ws.mergeCells(`A${currentRow}:C${currentRow}`)
+      const hdr = ws.getCell(`A${currentRow}`)
+      hdr.value = major
+      hdr.font = { bold: true, size: 12, color: { argb: WHITE } }
+      hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+      hdr.alignment = { horizontal: 'center' }
+      ws.getRow(currentRow).height = 20
+      currentRow++
+
+      headerRow(ws, ['Name', 'GPA', 'Status'], currentRow)
+      currentRow++
+
+      group.forEach((m: Profile, i: number) => {
+        const sub = subByMember.get(m.id)
+        const gpa = sub?.final_gpa ?? null
+        const row = ws.getRow(currentRow + i)
+        row.getCell(1).value = m.full_name
+        row.getCell(2).value = gpa !== null ? +gpa.toFixed(2) : '—'
+        row.getCell(3).value = sub?.status ?? 'Not Submitted'
+        if (gpa !== null) {
+          row.getCell(2).fill = gpaFill(gpa)!
+          row.getCell(2).font = { color: { argb: gpaFontColor(gpa) }, bold: true }
+        }
+        row.getCell(2).alignment = { horizontal: 'center' }
+        row.getCell(3).alignment = { horizontal: 'center' }
+      })
+      currentRow += group.length
+
+      const yrGpas = group.map((m: Profile) => subByMember.get(m.id)?.final_gpa ?? null).filter((g: number | null): g is number => g !== null)
+      const avg = yrGpas.length ? yrGpas.reduce((a: number, b: number) => a + b, 0) / yrGpas.length : null
+      const avgR = ws.getRow(currentRow)
+      avgR.getCell(1).value = `${major} Avg (${yrGpas.length}/${group.length} submitted)`
+      avgR.getCell(1).font = { bold: true, italic: true }
+      avgR.getCell(2).value = avg !== null ? +avg.toFixed(2) : '—'
+      avgR.getCell(2).font = { bold: true }
+      if (avg !== null) avgR.getCell(2).fill = gpaFill(avg)!
+      currentRow += 3
+    }
+  }
+
   // ── Individual Member Sheets ───────────────────────────────
   for (const m of members) {
     const sheetName = m.full_name.substring(0, 28).replace(/[*?:/\\[\]]/g, '')

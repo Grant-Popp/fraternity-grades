@@ -6,6 +6,14 @@ import Link from 'next/link'
 import { gpaColorClass } from '@/lib/gpa'
 import { useState, useEffect } from 'react'
 
+function TrendArrow({ current, previous }: { current: number; previous: number | null }) {
+  if (previous == null) return null
+  const diff = current - previous
+  if (Math.abs(diff) < 0.05) return <span className="text-slate-400 text-sm ml-1">→</span>
+  if (diff > 0) return <span className="text-green-400 text-sm ml-1" title={`+${diff.toFixed(2)} from last`}>↑</span>
+  return <span className="text-red-400 text-sm ml-1" title={`${diff.toFixed(2)} from last`}>↓</span>
+}
+
 interface ActiveRoundEntry {
   round: SemesterRound
   semesterName: string
@@ -71,9 +79,10 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
   const [legacyActive, setLegacyActive] = useState(initialLegacy)
   const hasOpen = activeRounds.length > 0 || legacyActive.length > 0
 
-  const latestGpa = (() => {
+  const [latestGpa, previousGpa] = (() => {
     const allSubs = [...activeRounds.map(r => r.submission), ...legacyActive.map(s => s.submission), ...past.map(s => s.submission)]
-    return allSubs.filter(Boolean).reverse().find(s => s?.final_gpa != null)?.final_gpa ?? null
+    const withGpa = allSubs.filter((s): s is Submission => s?.final_gpa != null).reverse()
+    return [withGpa[0]?.final_gpa ?? null, withGpa[1]?.final_gpa ?? null]
   })()
 
   const submittedCount = [
@@ -105,9 +114,9 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
         </div>
         <div className="card !p-4">
           <p className="text-slate-400 text-xs sm:text-sm">Latest GPA</p>
-          <p className="font-semibold text-sm sm:text-base">
+          <p className="font-semibold text-sm sm:text-base flex items-center">
             {latestGpa != null
-              ? <span className={gpaColorClass(latestGpa)}>{latestGpa.toFixed(2)}</span>
+              ? <><span className={gpaColorClass(latestGpa)}>{latestGpa.toFixed(2)}</span><TrendArrow current={latestGpa} previous={previousGpa} /></>
               : <span className="text-slate-400">—</span>}
           </p>
         </div>
@@ -206,6 +215,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
                     <th className="text-left px-4 py-3 text-slate-400 font-medium">Semester</th>
                     <th className="text-center px-4 py-3 text-slate-400 font-medium">GPA</th>
                     <th className="text-center px-4 py-3 text-slate-400 font-medium">Status</th>
+                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Note</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -220,6 +230,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
                       <td className="px-4 py-3 text-center">
                         <StatusBadge submission={s.submission} />
                       </td>
+                      <td className="px-4 py-3 text-amber-300 text-xs max-w-xs">{s.submission?.admin_notes ?? <span className="text-slate-600">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -5,6 +5,8 @@ export type Profile = {
   class_year: 'Freshman' | 'Sophomore' | 'Junior' | 'Senior'
   major: string | null
   role: 'member' | 'admin'
+  strikes: number
+  admin_notes: string | null
   created_at: string
 }
 

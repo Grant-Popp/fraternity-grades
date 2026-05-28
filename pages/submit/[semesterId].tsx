@@ -72,6 +72,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   const [selectedGrade, setSelectedGrade] = useState<string>('')
   const [lowQualityFlag, setLowQualityFlag] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const activeDeadline = activeRound?.deadline ?? semester.deadline
@@ -219,6 +220,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       setSubmitting(false)
       return
     }
+    setSubmittedAt(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
     setStep('done')
     submitLockRef.current = false
     setSubmitting(false)
@@ -241,6 +243,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       setSubmitting(false)
       return
     }
+    setSubmittedAt(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
     setStep('done')
     submitLockRef.current = false
     setSubmitting(false)
@@ -291,9 +294,13 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
         <div className="card text-center py-12 max-w-lg mx-auto">
           <p className="text-5xl mb-4">🎉</p>
           <h2 className="text-2xl font-bold text-white mb-2">Submission Received</h2>
-          <p className="text-slate-400 mb-6">
-            Your grades for <strong className="text-white">{pageTitle}</strong> have been submitted. The VP of Academics & Scholarship will review them shortly.
+          <p className="text-slate-400 mb-2">
+            Your grades for <strong className="text-white">{pageTitle}</strong> have been submitted.
           </p>
+          {submittedAt && (
+            <p className="text-slate-500 text-xs mb-2">Submitted {submittedAt}</p>
+          )}
+          <p className="text-slate-400 text-sm mb-6">The VP of Academics &amp; Scholarship will review them shortly. A confirmation email has been sent to your address.</p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
         </div>
       </Layout>

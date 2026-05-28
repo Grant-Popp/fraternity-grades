@@ -24,7 +24,7 @@ interface Stats {
 
 export default function AdminDashboard({ stats }: { stats: Stats }) {
   const submitRate = stats.activeSemester
-    ? Math.round((stats.activeSemester.submitted / Math.max(stats.activeSemester.total, 1)) * 100)
+    ? Math.min(100, Math.round((stats.activeSemester.submitted / Math.max(stats.activeSemester.total, 1)) * 100))
     : null
 
   const [threshold, setThreshold] = useState(stats.gpaThreshold.toString())
@@ -271,7 +271,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     id: activeSem.id, name: activeSem.name, deadline: activeSem.deadline,
     submitted: activeSemSubmitted,
     total: totalMembers,
-    complianceRate: totalMembers > 0 ? Math.round((activeSemSubmitted / totalMembers) * 100) : 0,
+    complianceRate: totalMembers > 0 ? Math.min(100, Math.round((activeSemSubmitted / totalMembers) * 100)) : 0,
   } : null
 
   const totalStrikes = (members ?? []).reduce((sum: number, m: any) => sum + (m.strikes ?? 0), 0)

@@ -89,7 +89,7 @@ export default function ProfilePage({ profile, history }: Props) {
               </select>
             </div>
             <div>
-              <label className="label">Major <span className="text-slate-500">(optional)</span></label>
+              <label className="label">Major</label>
               <select className="input" value={form.major}
                 onChange={e => setForm(f => ({ ...f, major: e.target.value, majorOther: '' }))}>
                 <option value="">— Select your major —</option>

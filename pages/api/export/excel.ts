@@ -29,9 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: semester } = await supabaseAdmin.from('semesters').select('*').eq('id', semesterId).single()
   if (!semester) return res.status(404).json({ error: 'Semester not found' })
 
-  const { data: submissions } = await supabaseAdmin.from('submissions').select('*').eq('semester_id', semesterId)
+  const [{ data: submissions }, { data: rounds }] = await Promise.all([
+    supabaseAdmin.from('submissions').select('*').eq('semester_id', semesterId),
+    supabaseAdmin.from('semester_rounds').select('*').eq('semester_id', semesterId).order('round_number'),
+  ])
 
-  const buffer = await generateExcel(members ?? [], submissions ?? [], semester)
+  const buffer = await generateExcel(members ?? [], submissions ?? [], semester, rounds ?? [])
 
   const filename = `grades-${semester.name.replace(/\s+/g, '-').toLowerCase()}.xlsx`
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

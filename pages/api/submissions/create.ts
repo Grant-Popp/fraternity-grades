@@ -147,6 +147,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'File could not be read. Please try again.' })
   }
 
+  // EXIF timestamp check — rejects old photos reused from previous semesters.
+  // Phones embed DateTimeOriginal in JPEGs; screenshots typically have no EXIF.
+  // If EXIF is absent we allow the submission (screenshot workflow).
+  try {
+    const ExifReader = (await import('exifreader')).default
+    const tags = ExifReader.load(fileBuffer)
+    const dateTag = (tags as any)['DateTimeOriginal'] ?? (tags as any)['DateTime']
+    if (dateTag?.description) {
+      const exifDate = (dateTag.description as string).replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
+      const photoDate = new Date(exifDate)
+      if (!isNaN(photoDate.getTime())) {
+        const daysOld = (Date.now() - photoDate.getTime()) / (1000 * 60 * 60 * 24)
+        if (daysOld > 45) {
+          return res.status(400).json({ error: `This photo was taken ${Math.round(daysOld)} days ago. Please take a new screenshot of your current grades.` })
+        }
+      }
+    }
+  } catch {
+    // EXIF parse failure — proceed without date check
+  }
+
   const ext = imageFile.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
   const storagePath = `${user.id}/${semesterId}.${ext}`
 

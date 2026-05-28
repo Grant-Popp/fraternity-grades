@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import type { Profile, Submission, Semester } from './database.types'
+import type { Profile, Submission, Semester, SemesterRound } from './database.types'
 
 export async function generateAllSemestersExcel(
   members: Profile[],
@@ -154,7 +154,8 @@ function headerRow(sheet: ExcelJS.Worksheet, cols: string[], rowNum: number) {
 export async function generateExcel(
   members: Profile[],
   submissions: Submission[],
-  semester: Semester
+  semester: Semester,
+  rounds?: SemesterRound[]
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Chapter Grade Portal'
@@ -413,6 +414,66 @@ export async function generateExcel(
     } else {
       ws.getRow(8).getCell(1).value = 'No submission for this semester'
       ws.getRow(8).getCell(1).font = { italic: true, color: { argb: 'FF94A3B8' } }
+    }
+  }
+
+  // ── By Round Sheet (only when semester has multiple rounds) ─
+  if (rounds && rounds.length > 0) {
+    const ws = workbook.addWorksheet('By Round')
+    ws.columns = [
+      { key: 'name', width: 24 }, { key: 'round', width: 16 },
+      { key: 'gpa', width: 10 }, { key: 'status', width: 14 },
+    ]
+
+    let currentRow = 1
+    for (const round of rounds) {
+      const roundSubs = submissions.filter(s => s.round_id === round.id)
+      const roundSubMap = new Map<string, Submission>()
+      roundSubs.forEach(s => roundSubMap.set(s.member_id, s))
+      if (roundSubs.length === 0) continue
+
+      ws.mergeCells(`A${currentRow}:D${currentRow}`)
+      const hdr = ws.getCell(`A${currentRow}`)
+      hdr.value = `${round.name}  —  Deadline: ${new Date(round.deadline).toLocaleDateString()}`
+      hdr.font = { bold: true, size: 12, color: { argb: WHITE } }
+      hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+      hdr.alignment = { horizontal: 'center' }
+      ws.getRow(currentRow).height = 22
+      currentRow++
+
+      headerRow(ws, ['Name', 'Round', 'GPA', 'Status'], currentRow)
+      currentRow++
+
+      const roundMembers = sorted.filter(m => roundSubMap.has(m.id))
+      roundMembers.forEach((m, i) => {
+        const sub = roundSubMap.get(m.id)!
+        const gpa = sub.final_gpa ?? null
+        const row = ws.getRow(currentRow + i)
+        row.getCell(1).value = m.full_name
+        row.getCell(2).value = round.name
+        row.getCell(3).value = gpa !== null ? +gpa.toFixed(2) : sub.no_grade ? 'N/A' : '—'
+        row.getCell(4).value = sub.status
+        row.getCell(2).alignment = { horizontal: 'center' }
+        row.getCell(3).alignment = { horizontal: 'center' }
+        row.getCell(4).alignment = { horizontal: 'center' }
+        if (gpa !== null) {
+          row.getCell(3).fill = gpaFill(gpa)!
+          row.getCell(3).font = { color: { argb: gpaFontColor(gpa) }, bold: true }
+        }
+      })
+      currentRow += Math.max(roundMembers.length, 1)
+
+      const roundGpas = roundMembers
+        .map(m => roundSubMap.get(m.id)?.final_gpa ?? null)
+        .filter((g): g is number => g !== null)
+      const avg = roundGpas.length ? roundGpas.reduce((a, b) => a + b, 0) / roundGpas.length : null
+      const avgR = ws.getRow(currentRow)
+      avgR.getCell(1).value = `${round.name} Avg — ${roundGpas.length}/${roundMembers.length} graded`
+      avgR.getCell(1).font = { bold: true, italic: true }
+      avgR.getCell(3).value = avg !== null ? +avg.toFixed(2) : '—'
+      avgR.getCell(3).font = { bold: true }
+      if (avg !== null) avgR.getCell(3).fill = gpaFill(avg)!
+      currentRow += 3
     }
   }
 

@@ -79,6 +79,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   const [lowQualityFlag, setLowQualityFlag] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submittedAt, setSubmittedAt] = useState<string | null>(null)
+  const [perCourseNoGrade, setPerCourseNoGrade] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
 
   const activeDeadline = activeRound?.deadline ?? semester.deadline
@@ -245,7 +246,9 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', ocrState?.rawText ?? '')
     formData.append('ocrGrade', lowQualityFlag ? '' : selectedGrade)
-    formData.append('courseGrades', JSON.stringify(ocrState?.courseGrades ?? {}))
+    const mergedCourseGrades = { ...(ocrState?.courseGrades ?? {}) }
+    Array.from(perCourseNoGrade).forEach(cid => { mergedCourseGrades[cid] = 'N/A' })
+    formData.append('courseGrades', JSON.stringify(mergedCourseGrades))
     if (activeRound) formData.append('roundId', activeRound.id)
     const res = await fetch('/api/submissions/create', { method: 'POST', body: formData })
     const data = await res.json()
@@ -683,6 +686,54 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 </p>
               )}
             </div>
+            {/* Per-course no-grade flags */}
+            {courses.filter(c => c.status === 'active').length > 0 && (
+              <div className="card">
+                <h3 className="font-semibold text-white mb-1">Any courses without a grade yet?</h3>
+                <p className="text-slate-400 text-sm mb-3">Check any course whose grades haven&apos;t been posted yet. The VP will see this.</p>
+                <div className="space-y-2">
+                  {courses.filter(c => c.status === 'active').map(c => {
+                    const normalizedId = c.course_id.replace(/\s+/g, '').toUpperCase()
+                    const detected = Object.entries(ocrState.courseGrades).find(
+                      ([k]) => k.replace(/\s+/g, '').toUpperCase() === normalizedId
+                    )
+                    const isNoGrade = perCourseNoGrade.has(c.course_id)
+                    return (
+                      <label key={c.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                        isNoGrade ? 'border-amber-600/40 bg-amber-900/10' : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isNoGrade}
+                            onChange={() => setPerCourseNoGrade(prev => {
+                              const next = new Set(prev)
+                              if (next.has(c.course_id)) next.delete(c.course_id)
+                              else next.add(c.course_id)
+                              return next
+                            })}
+                            className="rounded"
+                          />
+                          <div>
+                            <p className="text-sm text-white">{c.course_id} — {c.course_name}</p>
+                            <p className="text-xs text-slate-500">{c.credits} credit{c.credits !== 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          {isNoGrade ? (
+                            <span className="text-amber-400 text-xs font-medium">No grade yet</span>
+                          ) : detected ? (
+                            <span className="text-green-400 text-xs font-medium">Detected: {detected[1]}</span>
+                          ) : (
+                            <span className="text-slate-500 text-xs">Not detected</span>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
             <div className="flex gap-3">
               <button onClick={() => setStep('choose')} className="btn-secondary flex-1">← Back</button>

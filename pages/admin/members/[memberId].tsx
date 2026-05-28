@@ -158,13 +158,20 @@ export default function MemberDetailPage({ member: initialMember, submissions, s
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-900/60 border-b border-slate-700">
-                  {['Semester', 'Round', 'Submitted', 'OCR GPA', 'Final GPA', 'Status', 'Notes'].map(h => (
+                  {['Semester', 'Round', 'Submitted', 'OCR GPA', 'Final GPA', 'Status', 'Ungr. Courses', 'Notes'].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {submissions.map(s => (
+                {submissions.map(s => {
+                  const naCount = s.course_grades
+                    ? Object.values(s.course_grades as Record<string,string>).filter(v => v === 'N/A').length
+                    : 0
+                  const naCourses = s.course_grades
+                    ? Object.entries(s.course_grades as Record<string,string>).filter(([,v]) => v === 'N/A').map(([k]) => k)
+                    : []
+                  return (
                   <tr key={s.id} className="border-b border-slate-700/50 hover:bg-slate-700/10">
                     <td className="px-4 py-3 text-white">{s.semester_name}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{s.round_name ?? '—'}</td>
@@ -186,10 +193,19 @@ export default function MemberDetailPage({ member: initialMember, submissions, s
                       {s.status === 'reviewed' && <span className="badge-reviewed">Reviewed</span>}
                       {s.status === 'no_grade' && <span className="badge-no-grade">No Grade</span>}
                       {s.status === 'pending' && <span className="badge-pending">Pending</span>}
+                      {s.status === 'declined' && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {naCount > 0 ? (
+                        <span className="text-amber-400 text-xs" title={naCourses.join(', ')}>
+                          {naCourses.join(', ')}
+                        </span>
+                      ) : <span className="text-slate-600 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-3 text-slate-400 text-xs max-w-xs truncate">{s.admin_notes ?? '—'}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -16,12 +16,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Verify the row belongs to this user
   const { data: existing } = await supabaseAdmin
-    .from('member_courses').select('id,member_id').eq('id', memberCourseId).maybeSingle()
+    .from('member_courses').select('id,member_id,semester_id').eq('id', memberCourseId).maybeSingle()
   if (!existing || existing.member_id !== user.id) return res.status(403).json({ error: 'Forbidden' })
+
+  // Check for another course with the same course_id for this member+semester
+  const newCourseId = course_id.toUpperCase().trim()
+  const { data: conflict } = await supabaseAdmin
+    .from('member_courses')
+    .select('id')
+    .eq('member_id', user.id)
+    .eq('semester_id', existing.semester_id)
+    .eq('course_id', newCourseId)
+    .neq('id', memberCourseId)
+    .maybeSingle()
+  if (conflict) return res.status(400).json({ error: `You already have "${newCourseId}" in your course list.` })
 
   const { error } = await supabaseAdmin
     .from('member_courses')
-    .update({ course_id: course_id.toUpperCase().trim(), course_name: course_name.trim(), credits: cr })
+    .update({ course_id: newCourseId, course_name: course_name.trim(), credits: cr })
     .eq('id', memberCourseId)
 
   if (error) return res.status(400).json({ error: error.message })

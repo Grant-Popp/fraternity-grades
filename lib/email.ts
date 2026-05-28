@@ -56,15 +56,15 @@ function buildBody(opts: SendEmailOptions): string {
     confirmation: `
       <p>Hi ${memberName},</p>
       <p>Your grade submission for <strong>${semesterName}</strong> has been received successfully.</p>
-      <p>The VP of Academics will review your submission and no further action is needed from you.</p>
+      <p>The VP of Academics & Scholarship will review your submission and no further action is needed from you.</p>
     `,
     declined: `
       <p>Hi ${memberName},</p>
-      <p>Your grade submission for <strong>${semesterName}</strong> has been <strong style="color:#dc2626;">declined</strong> by the VP of Academics.</p>
+      <p>Your grade submission for <strong>${semesterName}</strong> has been <strong style="color:#dc2626;">declined</strong> by the VP of Academics & Scholarship.</p>
       ${opts.declineReason ? `<p><strong>Reason:</strong> ${opts.declineReason}</p>` : ''}
       <p>Please log back into the portal and resubmit a correct screenshot of your grades.</p>
       ${btn}
-      <p>If you have questions, contact your VP of Academics directly.</p>
+      <p>If you have questions, contact your VP of Academics & Scholarship directly.</p>
     `,
     at_risk_summary: `
       <p>Hi ${memberName},</p>

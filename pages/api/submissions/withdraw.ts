@@ -19,7 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!sub) return res.status(404).json({ error: 'Submission not found' })
   if (sub.member_id !== user.id) return res.status(403).json({ error: 'Forbidden' })
-  if (sub.status !== 'pending') return res.status(400).json({ error: 'Only pending submissions can be withdrawn' })
+  if (sub.status !== 'pending' && sub.status !== 'no_grade') return res.status(400).json({ error: 'Only pending or no-grade submissions can be withdrawn' })
 
   // Check that the deadline hasn't passed
   let deadline: string | null = null
@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     deadline = sem?.deadline ?? null
   }
   if (deadline && new Date(deadline) < new Date()) {
-    return res.status(400).json({ error: 'Deadline has passed — contact the VP of Academics to make changes' })
+    return res.status(400).json({ error: 'Deadline has passed — contact the VP of Academics & Scholarship to make changes' })
   }
 
   // Delete photo from storage if present

@@ -95,7 +95,7 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
               {stats.activeSemester.submitted}/{stats.activeSemester.total} ({submitRate}%)
             </span>
           </div>
-          <p className="text-slate-400 text-xs">Deadline: {new Date(stats.activeSemester.deadline).toLocaleString()}</p>
+          <p className="text-slate-400 text-xs">Deadline: {new Date(stats.activeSemester.deadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
         </div>
       )}
 

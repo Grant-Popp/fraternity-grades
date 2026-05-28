@@ -18,16 +18,17 @@ export default function LoginPage() {
     const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (loginError) { setError(loginError.message); setLoading(false); return }
 
-    if (data.session) {
-      await fetch('/api/auth/session', {
+    // Run session cookie + profile fetch in parallel to save ~200ms
+    const [, profileRes] = await Promise.all([
+      fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: data.session.access_token, expiresIn: data.session.expires_in }),
-      })
-    }
+        body: JSON.stringify({ accessToken: data.session!.access_token, expiresIn: data.session!.expires_in }),
+      }),
+      supabase.from('profiles').select('role').eq('id', data.user!.id).single(),
+    ])
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-    router.push(profile?.role === 'admin' ? '/admin' : '/dashboard')
+    router.push(profileRes.data?.role === 'admin' ? '/admin' : '/dashboard')
   }
 
   return (
@@ -42,7 +43,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="label">Email Address</label>
-              <input className="input" type="email" placeholder="you@university.edu"
+              <input className="input" type="email" placeholder="Your .edu email"
                 value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div>
@@ -56,7 +57,10 @@ export default function LoginPage() {
               </Link>
             </div>
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
-            <button type="submit" className="btn-primary w-full py-3" disabled={loading}>
+            <button type="submit" className="btn-primary w-full py-3 flex items-center justify-center gap-2" disabled={loading}>
+              {loading && (
+                <span className="inline-block w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+              )}
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>

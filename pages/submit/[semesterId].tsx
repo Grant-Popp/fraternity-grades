@@ -123,7 +123,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       return
     }
     if (!window.confirm(
-      `Mark ${courseId} — ${courseName} as dropped?\n\nThe VP of Academics will be notified. This cannot be undone.`
+      `Mark ${courseId} — ${courseName} as dropped?\n\nThe VP of Academics & Scholarship will be notified. This cannot be undone.`
     )) return
     setPendingDrops(prev => [...prev, courseId])
   }
@@ -264,7 +264,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           <p className="text-white font-semibold text-lg">Already submitted</p>
           <p className="text-slate-400 text-sm mt-1">
             You&apos;ve already submitted grades for {pageTitle}.
-            {activeRound && ' The VP of Academics will open a new round when it\'s time to check again.'}
+            {activeRound && ' The VP of Academics & Scholarship will open a new round when it\'s time to check again.'}
           </p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
         </div>
@@ -292,7 +292,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           <p className="text-5xl mb-4">🎉</p>
           <h2 className="text-2xl font-bold text-white mb-2">Submission Received</h2>
           <p className="text-slate-400 mb-6">
-            Your grades for <strong className="text-white">{pageTitle}</strong> have been submitted. The VP of Academics will review them shortly.
+            Your grades for <strong className="text-white">{pageTitle}</strong> have been submitted. The VP of Academics & Scholarship will review them shortly.
           </p>
           <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
         </div>
@@ -323,7 +323,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           </div>
           <div className="text-right">
             <p className="text-slate-400 text-sm">Deadline</p>
-            <p className="text-amber-400 font-semibold text-sm">{new Date(activeDeadline).toLocaleString()}</p>
+            <p className="text-amber-400 font-semibold text-sm">{new Date(activeDeadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
           </div>
         </div>
 
@@ -430,7 +430,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
             </div>
             {pendingDrops.length > 0 && (
               <p className="text-amber-400 text-xs mb-3 bg-amber-900/20 px-3 py-2 rounded-lg">
-                ⚠️ {pendingDrops.length} course{pendingDrops.length !== 1 ? 's' : ''} marked as dropped. The VP of Academics will be notified when you continue.
+                ⚠️ {pendingDrops.length} course{pendingDrops.length !== 1 ? 's' : ''} marked as dropped. The VP of Academics & Scholarship will be notified when you continue.
               </p>
             )}
 
@@ -502,7 +502,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
 
         {/* Step: Choose upload path */}
         {step === 'choose' && (
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             <label
               htmlFor="grade-photo"
               className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer block"
@@ -512,20 +512,12 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
               <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
             </label>
             <button
-              onClick={() => setStep('not_posted')}
-              className="card text-left hover:border-amber-500/50 border-2 border-transparent transition-colors cursor-pointer"
-            >
-              <p className="text-3xl mb-3">⏳</p>
-              <p className="font-bold text-white text-lg">No Current Grade</p>
-              <p className="text-slate-400 text-sm mt-1">Grades haven&apos;t been posted yet. Come back before the deadline to submit.</p>
-            </button>
-            <button
               onClick={() => setStep('no_grade')}
               className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
             >
               <p className="text-3xl mb-3">🚫</p>
-              <p className="font-bold text-white text-lg">No Grades Yet</p>
-              <p className="text-slate-400 text-sm mt-1">No grades to report for this round. This will be recorded by the VP of Academics.</p>
+              <p className="font-bold text-white text-lg">No Grades for Any Course Yet</p>
+              <p className="text-slate-400 text-sm mt-1">Grades haven&apos;t been posted for any of your courses yet. This will be noted by the VP of Academics & Scholarship.</p>
             </button>
           </div>
         )}
@@ -560,12 +552,12 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 <label className="label">Detected Grade</label>
                 {lowQualityFlag ? (
                   <p className="text-amber-400 text-sm bg-amber-900/20 px-3 py-2 rounded-lg">
-                    ⚠️ Flagged as unclear — the VP of Academics will review your photo manually.
+                    ⚠️ Flagged as unclear — the VP of Academics & Scholarship will review your photo manually.
                   </p>
                 ) : selectedGrade ? (
                   <p className="text-2xl font-bold text-white mt-1">{selectedGrade} <span className="text-slate-400 text-base font-normal">({GRADE_MAP[selectedGrade]?.toFixed(1)} GPA pts)</span></p>
                 ) : (
-                  <p className="text-slate-400 text-sm mt-1">No grade detected — the VP of Academics will review your photo.</p>
+                  <p className="text-slate-400 text-sm mt-1">No grade detected — the VP of Academics & Scholarship will review your photo.</p>
                 )}
               </div>
               <button
@@ -616,7 +608,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
             <p className="text-4xl mb-4">⏳</p>
             <h3 className="text-white font-semibold text-lg mb-2">No Current Grade</h3>
             <p className="text-slate-400 text-sm mb-2">
-              Come back before <strong className="text-amber-400">{new Date(activeDeadline).toLocaleString()}</strong> to submit your grades once they&apos;re posted.
+              Come back before <strong className="text-amber-400">{new Date(activeDeadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong> to submit your grades once they&apos;re posted.
             </p>
             <p className="text-slate-500 text-xs mb-6">Nothing has been recorded — you can return to this page at any time before the deadline.</p>
             <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
@@ -628,10 +620,10 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
         {step === 'no_grade' && (
           <div className="card text-center py-10">
             <p className="text-4xl mb-4">🚫</p>
-            <h3 className="text-white font-semibold text-lg mb-2">Confirm: No Grades Yet</h3>
+            <h3 className="text-white font-semibold text-lg mb-2">Confirm: No Grades for Any Course Yet</h3>
             <p className="text-slate-400 text-sm mb-6">
               You are indicating that you have no grades to report for <strong className="text-white">{pageTitle}</strong>.
-              The VP of Academics will be notified.
+              The VP of Academics & Scholarship will be notified.
             </p>
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg mb-4">{error}</p>}
             <div className="flex gap-3 justify-center">

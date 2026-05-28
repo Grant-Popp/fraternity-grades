@@ -89,7 +89,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
         <div className="mb-4 px-4 py-3 rounded-lg border border-red-700 bg-red-900/20">
           <p className="text-red-300 font-semibold text-sm">Academic Standing Warning</p>
           <p className="text-slate-400 text-sm mt-0.5">
-            Your current GPA is below the chapter minimum of {gpaThreshold.toFixed(2)}. Please contact your VP of Academics.
+            Your current GPA is below the chapter minimum of {gpaThreshold.toFixed(2)}. Please contact your VP of Academics & Scholarship.
           </p>
         </div>
       )}
@@ -134,7 +134,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={entry.submission} />
-                  {entry.submission?.status === 'pending' && new Date(entry.round.deadline) > new Date() && (
+                  {(entry.submission?.status === 'pending' || entry.submission?.status === 'no_grade') && new Date(entry.round.deadline) > new Date() && (
                     <WithdrawButton
                       submissionId={entry.submission.id}
                       onWithdrawn={() => setActiveRounds(prev => prev.map(r => r.round.id === entry.round.id ? { ...r, submission: null } : r))}
@@ -166,7 +166,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={s.submission} />
-                  {s.submission?.status === 'pending' && new Date(s.deadline) > new Date() && (
+                  {(s.submission?.status === 'pending' || s.submission?.status === 'no_grade') && new Date(s.deadline) > new Date() && (
                     <WithdrawButton
                       submissionId={s.submission.id}
                       onWithdrawn={() => setLegacyActive(prev => prev.map(l => l.id === s.id ? { ...l, submission: null } : l))}
@@ -189,8 +189,8 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
         <div className="card text-center py-12 mb-8">
           <p className="text-4xl mb-3">📭</p>
           <p className="text-white font-semibold text-lg">No open submissions</p>
-          <p className="text-slate-400 text-sm mt-1">The VP of Academics hasn&apos;t opened a new round yet.</p>
-          <p className="text-slate-500 text-xs mt-3">Questions? Email the VP of Academics: <a href="mailto:pktbb.academics@gmail.com" className="text-amber-400 hover:text-amber-300">pktbb.academics@gmail.com</a></p>
+          <p className="text-slate-400 text-sm mt-1">The VP of Academics & Scholarship hasn&apos;t opened a new round yet.</p>
+          <p className="text-slate-500 text-xs mt-3">Questions? Email the VP of Academics & Scholarship: <a href="mailto:pktbb.academics@gmail.com" className="text-amber-400 hover:text-amber-300">pktbb.academics@gmail.com</a></p>
         </div>
       )}
 

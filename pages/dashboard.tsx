@@ -46,7 +46,29 @@ function DeadlineCountdown({ deadline }: { deadline: string }) {
   return <span className="text-red-400 text-sm font-semibold">Due very soon!</span>
 }
 
-export default function Dashboard({ profile, activeRounds, legacyActive, past, isAtRisk, gpaThreshold }: Props) {
+function WithdrawButton({ submissionId, onWithdrawn }: { submissionId: string; onWithdrawn: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const withdraw = async () => {
+    if (!window.confirm('Withdraw your submission? You can resubmit before the deadline, but this cannot be undone.')) return
+    setLoading(true)
+    const res = await fetch('/api/submissions/withdraw', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionId }),
+    })
+    if (res.ok) onWithdrawn()
+    else setLoading(false)
+  }
+  return (
+    <button onClick={withdraw} disabled={loading} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
+      {loading ? '…' : 'Withdraw'}
+    </button>
+  )
+}
+
+export default function Dashboard({ profile, activeRounds: initialRounds, legacyActive: initialLegacy, past, isAtRisk, gpaThreshold }: Props) {
+  const [activeRounds, setActiveRounds] = useState(initialRounds)
+  const [legacyActive, setLegacyActive] = useState(initialLegacy)
   const hasOpen = activeRounds.length > 0 || legacyActive.length > 0
 
   const latestGpa = (() => {
@@ -112,6 +134,12 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past, i
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={entry.submission} />
+                  {entry.submission?.status === 'pending' && new Date(entry.round.deadline) > new Date() && (
+                    <WithdrawButton
+                      submissionId={entry.submission.id}
+                      onWithdrawn={() => setActiveRounds(prev => prev.map(r => r.round.id === entry.round.id ? { ...r, submission: null } : r))}
+                    />
+                  )}
                   {(!entry.submission || entry.submission.status === 'declined') && new Date(entry.round.deadline) > new Date() && (
                     <Link
                       href={`/submit/${entry.semesterId}`}
@@ -138,6 +166,12 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past, i
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <StatusBadge submission={s.submission} />
+                  {s.submission?.status === 'pending' && new Date(s.deadline) > new Date() && (
+                    <WithdrawButton
+                      submissionId={s.submission.id}
+                      onWithdrawn={() => setLegacyActive(prev => prev.map(l => l.id === s.id ? { ...l, submission: null } : l))}
+                    />
+                  )}
                   {(!s.submission || s.submission.status === 'declined') && new Date(s.deadline) > new Date() && (
                     <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5 whitespace-nowrap">
                       {s.submission?.status === 'declined' ? 'Resubmit →' : 'Submit Grades →'}
@@ -156,7 +190,7 @@ export default function Dashboard({ profile, activeRounds, legacyActive, past, i
           <p className="text-4xl mb-3">📭</p>
           <p className="text-white font-semibold text-lg">No open submissions</p>
           <p className="text-slate-400 text-sm mt-1">The VP of Academics hasn&apos;t opened a new round yet.</p>
-          <p className="text-slate-500 text-xs mt-3">Questions? Contact your chapter&apos;s VP of Academics directly.</p>
+          <p className="text-slate-500 text-xs mt-3">Questions? Email the VP of Academics: <a href="mailto:pktbb.academics@gmail.com" className="text-amber-400 hover:text-amber-300">pktbb.academics@gmail.com</a></p>
         </div>
       )}
 

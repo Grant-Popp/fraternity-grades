@@ -54,6 +54,9 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   // Course review / drop state
   const [pendingDrops, setPendingDrops] = useState<string[]>([])
   const [savingDrops, setSavingDrops] = useState(false)
+  const [showAddCourse, setShowAddCourse] = useState(false)
+  const [newCourseRows, setNewCourseRows] = useState<CourseRow[]>([{ key: '1', course_id: '', course_name: '', credits: '' }])
+  const [addCourseError, setAddCourseError] = useState('')
 
   // Photo/OCR state
   const [file, setFile] = useState<File | null>(null)
@@ -126,8 +129,20 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   }
 
   const handleContinueFromReview = async () => {
+    // Validate any new courses before proceeding
+    const filledNew = newCourseRows.filter(r => r.course_id.trim() || r.course_name.trim() || r.credits.trim())
+    if (showAddCourse && filledNew.length > 0) {
+      setAddCourseError('')
+      for (const r of filledNew) {
+        if (!r.course_id.trim()) { setAddCourseError('Course ID is required for all new courses.'); return }
+        if (!r.course_name.trim()) { setAddCourseError('Course name is required for all new courses.'); return }
+        const cr = parseInt(r.credits)
+        if (isNaN(cr) || cr < 1 || cr > 6) { setAddCourseError('Credits must be a number 1–6.'); return }
+      }
+    }
+
+    setSavingDrops(true)
     if (pendingDrops.length > 0) {
-      setSavingDrops(true)
       for (const courseId of pendingDrops) {
         await fetch('/api/courses/drop', {
           method: 'POST',
@@ -135,8 +150,22 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           body: JSON.stringify({ semesterId: semester.id, courseId }),
         })
       }
-      setSavingDrops(false)
     }
+    if (showAddCourse && filledNew.length > 0) {
+      await fetch('/api/courses/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          semesterId: semester.id,
+          courses: filledNew.map(r => ({
+            course_id: r.course_id.toUpperCase().trim(),
+            course_name: r.course_name.trim(),
+            credits: parseInt(r.credits),
+          })),
+        }),
+      })
+    }
+    setSavingDrops(false)
     setStep('choose')
   }
 
@@ -404,6 +433,67 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 ⚠️ {pendingDrops.length} course{pendingDrops.length !== 1 ? 's' : ''} marked as dropped. The VP of Academics will be notified when you continue.
               </p>
             )}
+
+            {/* Add new courses */}
+            {!showAddCourse ? (
+              <button onClick={() => setShowAddCourse(true)} className="text-amber-400 hover:text-amber-300 text-sm mb-4 block">
+                + Add a course
+              </button>
+            ) : (
+              <div className="mb-4 border border-slate-700 rounded-lg p-3 bg-slate-800/40">
+                <p className="text-slate-300 text-xs font-medium mb-2">New courses to add:</p>
+                <div className="mb-1 hidden sm:grid sm:grid-cols-[1fr_2fr_60px_28px] gap-2">
+                  <span className="text-slate-500 text-xs">Course ID</span>
+                  <span className="text-slate-500 text-xs">Course Name</span>
+                  <span className="text-slate-500 text-xs text-center">Credits</span>
+                  <span />
+                </div>
+                <div className="space-y-2 mb-2">
+                  {newCourseRows.map(row => (
+                    <div key={row.key} className="grid grid-cols-[1fr_2fr_60px_28px] gap-2 items-center">
+                      <input
+                        className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                        placeholder="ENGR 110"
+                        value={row.course_id}
+                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_id: e.target.value } : r))}
+                      />
+                      <input
+                        className="input !py-1.5 !text-sm"
+                        placeholder="Course Name"
+                        value={row.course_name}
+                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_name: e.target.value } : r))}
+                      />
+                      <input
+                        className="input !py-1.5 !text-sm text-center"
+                        placeholder="3"
+                        type="number"
+                        min={1}
+                        max={6}
+                        value={row.credits}
+                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, credits: e.target.value } : r))}
+                      />
+                      <button
+                        onClick={() => setNewCourseRows(prev => prev.length > 1 ? prev.filter(r => r.key !== row.key) : prev)}
+                        disabled={newCourseRows.length === 1}
+                        className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30"
+                      >×</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setNewCourseRows(prev => [...prev, { key: Date.now().toString(), course_id: '', course_name: '', credits: '' }])}
+                    className="text-amber-400 hover:text-amber-300 text-xs"
+                  >+ Add another</button>
+                  <button
+                    onClick={() => { setShowAddCourse(false); setNewCourseRows([{ key: '1', course_id: '', course_name: '', credits: '' }]); setAddCourseError('') }}
+                    className="text-slate-500 hover:text-slate-300 text-xs"
+                  >Cancel</button>
+                </div>
+                {addCourseError && <p className="text-red-400 text-xs mt-2">{addCourseError}</p>}
+              </div>
+            )}
+
             <button onClick={handleContinueFromReview} disabled={savingDrops} className="btn-primary w-full">
               {savingDrops ? 'Saving…' : `Continue${pendingDrops.length > 0 ? ` (${pendingDrops.length} dropped)` : ''} →`}
             </button>

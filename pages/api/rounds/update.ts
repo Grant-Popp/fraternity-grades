@@ -14,6 +14,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (typeof isActive === 'boolean') update.is_active = isActive
   if (deadline) {
     if (isNaN(Date.parse(deadline))) return res.status(400).json({ error: 'Invalid deadline' })
+    const { data: round } = await supabaseAdmin.from('semester_rounds').select('semester_id').eq('id', roundId).maybeSingle()
+    if (round) {
+      const { data: parentSem } = await supabaseAdmin.from('semesters').select('deadline').eq('id', round.semester_id).maybeSingle()
+      if (parentSem && new Date(deadline) > new Date(parentSem.deadline)) {
+        return res.status(400).json({ error: 'Round deadline cannot be after the semester deadline' })
+      }
+    }
     update.deadline = deadline
   }
   if (Object.keys(update).length === 0) return res.status(400).json({ error: 'Nothing to update' })

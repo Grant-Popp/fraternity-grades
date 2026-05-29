@@ -62,7 +62,7 @@ const MAJORS = [
 
 export default function SignupPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman', major: '', majorOther: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', confirm: '', class_year: 'Freshman', major: '', majorOther: '', inviteCode: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -74,6 +74,19 @@ export default function SignupPage() {
     if (!form.full_name.trim()) return setError('Please enter your full name.')
 
     setLoading(true)
+
+    // Validate invite code (if one is required by admin)
+    const codeCheck = await fetch('/api/auth/validate-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: form.inviteCode.trim() }),
+    })
+    if (!codeCheck.ok) {
+      const d = await codeCheck.json()
+      setError(d.error ?? 'Invalid invite code')
+      setLoading(false)
+      return
+    }
     const { data, error: signupError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
@@ -133,6 +146,12 @@ export default function SignupPage() {
                 <input className="input mt-2" type="text" placeholder="Enter your major"
                   value={form.majorOther} onChange={e => setForm(f => ({ ...f, majorOther: e.target.value }))} />
               )}
+            </div>
+            <div>
+              <label className="label">Invite Code</label>
+              <input className="input" type="text" placeholder="Get this from your VP of Academics" value={form.inviteCode}
+                onChange={e => setForm(f => ({ ...f, inviteCode: e.target.value }))} autoCapitalize="characters" />
+              <p className="text-slate-500 text-xs mt-1">Leave blank if your chapter hasn&apos;t set one up.</p>
             </div>
             <div>
               <label className="label">Password</label>

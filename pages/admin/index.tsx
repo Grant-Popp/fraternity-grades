@@ -22,7 +22,7 @@ interface Stats {
   totalStrikes: number
 }
 
-export default function AdminDashboard({ stats }: { stats: Stats }) {
+export default function AdminDashboard({ stats, signupCode: initialCode }: { stats: Stats; signupCode: string | null }) {
   const submitRate = stats.activeSemester
     ? Math.min(100, Math.round((stats.activeSemester.submitted / Math.max(stats.activeSemester.total, 1)) * 100))
     : null
@@ -31,6 +31,27 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
   const [savingThreshold, setSavingThreshold] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [signupCode, setSignupCode] = useState<string | null>(initialCode)
+  const [codeVisible, setCodeVisible] = useState(false)
+  const [codeLoading, setCodeLoading] = useState(false)
+
+  const generateCode = async () => {
+    setCodeLoading(true)
+    const res = await fetch('/api/admin/signup-code', { method: 'POST' })
+    const data = await res.json()
+    setSignupCode(data.code)
+    setCodeVisible(true)
+    setCodeLoading(false)
+  }
+
+  const disableCode = async () => {
+    if (!window.confirm('Disable the invite code? Anyone can sign up without a code until you generate a new one.')) return
+    setCodeLoading(true)
+    await fetch('/api/admin/signup-code', { method: 'DELETE' })
+    setSignupCode(null)
+    setCodeVisible(false)
+    setCodeLoading(false)
+  }
 
   const saveThreshold = async () => {
     const val = parseFloat(threshold)
@@ -196,14 +217,52 @@ export default function AdminDashboard({ stats }: { stats: Stats }) {
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div /> {/* spacer */}
+      <div className="grid md:grid-cols-2 gap-6 mb-6">
+        {/* Chapter settings */}
+        <div className="card">
+          <h2 className="font-semibold text-white mb-4">Chapter Settings</h2>
+          <div className="space-y-4">
+            {/* Invite code */}
+            <div>
+              <p className="text-slate-300 text-sm font-medium mb-1">Invite Code</p>
+              <p className="text-slate-500 text-xs mb-3">When set, new members must enter this code to create an account.</p>
+              {signupCode ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <code className={`bg-slate-800 px-3 py-1.5 rounded text-sm font-mono ${codeVisible ? 'text-amber-400' : 'text-slate-600 tracking-widest'}`}>
+                    {codeVisible ? signupCode : '••••••••'}
+                  </code>
+                  <button onClick={() => setCodeVisible(v => !v)} className="text-xs text-slate-400 hover:text-white transition-colors">
+                    {codeVisible ? 'Hide' : 'Show'}
+                  </button>
+                  <button onClick={() => { navigator.clipboard.writeText(signupCode); }} className="text-xs text-slate-400 hover:text-amber-400 transition-colors">
+                    Copy
+                  </button>
+                  <button onClick={generateCode} disabled={codeLoading} className="text-xs text-amber-400 hover:text-amber-300 transition-colors">
+                    Rotate
+                  </button>
+                  <button onClick={disableCode} disabled={codeLoading} className="text-xs text-slate-500 hover:text-red-400 transition-colors">
+                    Disable
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-slate-500 text-xs">No code set — open signup</span>
+                  <button onClick={generateCode} disabled={codeLoading} className="btn-primary text-xs py-1 px-3">
+                    {codeLoading ? '…' : 'Generate Code'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Quick actions */}
         <div className="card">
           <h2 className="font-semibold text-white mb-4">Quick Actions</h2>
           <div className="space-y-2">
             {[
               { href: '/admin/submissions', label: `Review ${stats.pendingReview} pending submissions`, icon: '📋', primary: stats.pendingReview > 0 },
+              { href: '/admin/compliance', label: 'View compliance board', icon: '✅', primary: false },
               { href: '/admin/semesters', label: 'Manage semesters & deadlines', icon: '📅', primary: false },
               { href: '/admin/export', label: 'Export grades to Excel', icon: '📥', primary: false },
               { href: '/admin/members', label: 'View all members', icon: '👥', primary: false },
@@ -302,5 +361,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     return [{ id: m.id, name: (m as any).full_name ?? 'Unknown', gpa: latest.final_gpa }]
   }).sort((a, b) => a.gpa - b.gpa)
 
-  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData, gpaThreshold, atRiskMembers, totalStrikes } } }
+  let signupCode: string | null = null
+  try {
+    const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
+    const { data: codeRow } = await (admin.from('chapter_settings' as any).select('signup_code').eq('id', 1).maybeSingle())
+    signupCode = (codeRow as any)?.signup_code ?? null
+  } catch {}
+
+  return { props: { stats: { totalMembers, activeSubmissions: 0, pendingReview, dropAlerts, chapterGpa, reviewedCount: reviewed.length, byYear, byMajor, activeSemester: activeSemesterData, gpaThreshold, atRiskMembers, totalStrikes }, signupCode } }
 }

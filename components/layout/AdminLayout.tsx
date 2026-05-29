@@ -58,9 +58,17 @@ const PhotoIcon = () => (
   </svg>
 )
 
+const ComplianceIcon = () => (
+  <svg className="w-[18px] h-[18px] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75}
+      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
 const navItems = [
   { href: '/admin',             label: 'Dashboard',    Icon: DashboardIcon },
   { href: '/admin/submissions', label: 'Submissions',  Icon: ClipboardIcon },
+  { href: '/admin/compliance',  label: 'Compliance',   Icon: ComplianceIcon },
   { href: '/admin/members',     label: 'Members',      Icon: UsersIcon },
   { href: '/admin/semesters',   label: 'Semesters',    Icon: CalendarIcon },
   { href: '/admin/photos',      label: 'Photos',       Icon: PhotoIcon },

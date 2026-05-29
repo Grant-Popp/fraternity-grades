@@ -84,7 +84,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const { sendEmail } = await import('@/lib/email')
         await sendEmail({ to: profile.email, memberName: profile.full_name, semesterName: sem.name, type: 'confirmation' })
       }
-    } catch {}
+    } catch (err: any) {
+      console.error('[email] confirmation send failed:', err?.message)
+    }
 
     return res.status(200).json({ ok: true })
   }
@@ -191,7 +193,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const ext = imageFile.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
-  const storagePath = `${user.id}/${semesterId}.${ext}`
+  // Include roundId so Round 1 and Round 2 photos don't overwrite each other
+  const pathSuffix = roundId ? `${semesterId}_${roundId}` : `${semesterId}_legacy`
+  const storagePath = `${user.id}/${pathSuffix}.${ext}`
 
   const { error: uploadError } = await supabaseAdmin.storage
     .from('grade-photos')
@@ -289,7 +293,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const { sendEmail } = await import('@/lib/email')
       await sendEmail({ to: memberProfile.email, memberName: memberProfile.full_name, semesterName: semester.name, type: 'confirmation' })
     }
-  } catch {}
+  } catch (err: any) {
+    console.error('[email] confirmation send failed:', err?.message)
+  }
 
   return res.status(200).json({ ok: true, duplicateFlag: duplicate_flag })
 }

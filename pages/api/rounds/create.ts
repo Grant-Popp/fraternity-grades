@@ -12,6 +12,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (typeof name !== 'string' || name.trim().length > 100) return res.status(400).json({ error: 'Round name must be 100 characters or less' })
   if (isNaN(Date.parse(deadline))) return res.status(400).json({ error: 'Invalid deadline' })
 
+  const { data: parentSem } = await supabaseAdmin.from('semesters').select('deadline').eq('id', semesterId).maybeSingle()
+  if (parentSem && new Date(deadline) > new Date(parentSem.deadline)) {
+    return res.status(400).json({ error: 'Round deadline cannot be after the semester deadline' })
+  }
+
   const { data: existing } = await supabaseAdmin
     .from('semester_rounds')
     .select('round_number')

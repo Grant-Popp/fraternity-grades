@@ -36,8 +36,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const memberProfile = sub.profiles as any
     const semester = sub.semesters as any
     if (memberProfile && semester) {
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
-      const submitUrl = `${siteUrl}/submit/${sub.semester_id}`
+      const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? 'localhost:3000') as string
+      const proto = host.includes('localhost') ? 'http' : 'https'
+      const submitUrl = `${proto}://${host}/submit/${sub.semester_id}`
       await sendEmail({
         to: memberProfile.email,
         memberName: memberProfile.full_name,
@@ -47,7 +48,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         submitUrl,
       })
     }
-  } catch {}
+  } catch (err: any) {
+    console.error('[email] decline send failed:', err?.message)
+  }
 
   return res.status(200).json({ ok: true })
 }

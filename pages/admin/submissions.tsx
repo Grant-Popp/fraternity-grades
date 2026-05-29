@@ -8,6 +8,7 @@ import type { Submission, Profile, Semester, DropAlert } from '@/lib/database.ty
 
 interface DuplicateMatch {
   id: string
+  memberId: string
   memberName: string
   submittedAt: string
   semesterName: string
@@ -448,7 +449,11 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                                     <ul className="space-y-0.5">
                                       {s.duplicate_matches.map(m => (
                                         <li key={m.id} className="text-xs text-amber-200">
-                                          • <span className="font-medium">{m.memberName}</span> — {m.semesterName} (submitted {new Date(m.submittedAt).toLocaleDateString()})
+                                          •{' '}
+                                          <Link href={`/admin/members/${m.memberId}`} className="font-medium underline hover:text-amber-400 transition-colors">
+                                            {m.memberName}
+                                          </Link>
+                                          {' '}— {m.semesterName} (submitted {new Date(m.submittedAt).toLocaleDateString()})
                                         </li>
                                       ))}
                                     </ul>
@@ -508,17 +513,18 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     semester_rounds: undefined,
   }))
 
-  // Compute phash duplicate matches for flagged submissions
+  // Compute phash duplicate matches for flagged submissions (threshold 8, matches submission logic)
   try {
     const { hammingDistance } = await import('@/lib/phash')
     const subsWithHash = submissions.filter(s => s.photo_phash)
     for (const sub of submissions) {
       if (!sub.duplicate_flag || !sub.photo_phash) continue
       sub.duplicate_matches = subsWithHash
-        .filter(other => other.id !== sub.id && other.photo_phash)
-        .filter(other => hammingDistance(sub.photo_phash!, other.photo_phash!) <= 10)
+        .filter(other => other.id !== sub.id && other.member_id !== sub.member_id && other.photo_phash)
+        .filter(other => hammingDistance(sub.photo_phash!, other.photo_phash!) <= 8)
         .map(other => ({
           id: other.id,
+          memberId: other.member_id,
           memberName: other.member_name,
           submittedAt: other.submitted_at,
           semesterName: other.semester_name,

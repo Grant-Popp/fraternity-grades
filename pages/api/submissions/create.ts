@@ -235,28 +235,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
   // ── Anti-cheat 2: Perceptual hash ────────────────────────────
-  // Catches identical or near-identical images reused across ANY past submission.
-  // Threshold 8 (tightened from 10). When a match is found, retroactively flags
-  // any still-pending submissions from the same semester/round that shared the photo
-  // so both the sharer and the original submitter are caught.
+  // Catches identical or near-identical images reused across ANY past submission
+  // (any semester, any round, any status). Threshold 8 (tightened from 10).
+  // When a match is found, ALL matching submissions from other members are
+  // retroactively flagged regardless of their current status or semester.
   try {
     photo_phash = await computePhash(fileBuffer)
     const { data: allPastSubs } = await supabaseAdmin
       .from('submissions')
-      .select('id, photo_phash, member_id, round_id, semester_id, status')
+      .select('id, photo_phash, member_id')
       .not('photo_phash', 'is', null)
       .limit(2000)
     const currentHash = photo_phash
     const allHashes = (allPastSubs ?? []).map((s: any) => s.photo_phash).filter(Boolean) as string[]
     if (isDuplicate(currentHash, allHashes, 8)) {
       duplicate_flag = true
-      // Retroactively flag same-scope pending submissions whose photo matches this one
+      // Retroactively flag every matching submission from another member, cross-semester
       const toFlag = (allPastSubs ?? []).filter((s: any) =>
-        s.photo_phash &&
-        s.member_id !== user.id &&
-        s.status === 'pending' &&
-        (roundId ? s.round_id === roundId : s.semester_id === semesterId) &&
-        isDuplicate(currentHash, [s.photo_phash], 8)
+        s.photo_phash && s.member_id !== user.id && isDuplicate(currentHash, [s.photo_phash], 8)
       )
       if (toFlag.length > 0) {
         await Promise.all(toFlag.map((s: any) =>

@@ -16,9 +16,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (typeof name !== 'string' || name.trim().length > 100) return res.status(400).json({ error: 'Semester name must be 100 characters or less' })
   if (isNaN(Date.parse(deadline))) return res.status(400).json({ error: 'Invalid deadline date' })
 
+  const VALID_YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior']
   const years = Array.isArray(required_years) && required_years.length > 0
-    ? required_years
-    : ['Freshman', 'Sophomore', 'Junior', 'Senior']
+    ? required_years.filter((y: unknown) => VALID_YEARS.includes(y as string))
+    : VALID_YEARS
+  if (years.length === 0) return res.status(400).json({ error: 'At least one valid class year required' })
 
   const { data: semester, error } = await supabaseAdmin.from('semesters').insert({ name, deadline, required_years: years }).select().single()
   if (error) return res.status(400).json({ error: error.message })

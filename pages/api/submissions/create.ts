@@ -112,7 +112,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const imageFile = Array.isArray(files.file) ? files.file[0] : files.file
 
   let courseGradesData: Record<string, string> = {}
-  try { courseGradesData = JSON.parse(courseGradesRaw) } catch {}
+  if (courseGradesRaw && courseGradesRaw !== '{}') {
+    try {
+      const parsed = JSON.parse(courseGradesRaw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const entries = Object.entries(parsed)
+        if (entries.length <= 20) {
+          for (const [k, v] of entries) {
+            if (typeof k === 'string' && typeof v === 'string' && k.length <= 30 && v.length <= 20) {
+              courseGradesData[k] = v
+            }
+          }
+        }
+      }
+    } catch {}
+  }
 
   if (!semesterId || !imageFile) return res.status(400).json({ error: 'Missing required fields' })
 

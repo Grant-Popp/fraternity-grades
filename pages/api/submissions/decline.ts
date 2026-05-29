@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getUserFromRequest } from '@/lib/apiAuth'
+import { getAppBaseUrl } from '@/lib/appUrl'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PATCH') return res.status(405).end()
@@ -36,9 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const memberProfile = sub.profiles as any
     const semester = sub.semesters as any
     if (memberProfile && semester) {
-      const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? 'localhost:3000') as string
-      const proto = host.includes('localhost') ? 'http' : 'https'
-      const submitUrl = `${proto}://${host}/submit/${sub.semester_id}`
+      const submitUrl = `${getAppBaseUrl()}/submit/${sub.semester_id}`
       await sendEmail({
         to: memberProfile.email,
         memberName: memberProfile.full_name,

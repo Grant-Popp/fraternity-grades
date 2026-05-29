@@ -15,6 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!full_name?.trim()) return res.status(400).json({ error: 'Name is required.' })
   if (full_name.trim().length > 100) return res.status(400).json({ error: 'Name is too long.' })
   if (!CLASS_YEARS.includes(class_year)) return res.status(400).json({ error: 'Invalid class year.' })
+  if (major && typeof major === 'string' && major.trim().length > 100) return res.status(400).json({ error: 'Major is too long.' })
 
   const { error } = await supabaseAdmin
     .from('profiles')

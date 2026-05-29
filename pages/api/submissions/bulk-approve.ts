@@ -21,18 +21,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!pending?.length) return res.json({ approved: 0 })
 
-  let approved = 0
-  const now = new Date().toISOString()
-  for (const sub of pending) {
-    if (sub.ocr_gpa == null) continue
-    await supabaseAdmin.from('submissions').update({
-      status: 'reviewed',
-      admin_gpa: sub.ocr_gpa,
-      final_gpa: sub.ocr_gpa,
-      reviewed_at: now,
-    } as any).eq('id', sub.id)
-    approved++
-  }
+  const eligible = pending.filter(s => s.ocr_gpa != null)
+  if (eligible.length === 0) return res.json({ approved: 0 })
 
-  return res.json({ approved })
+  const now = new Date().toISOString()
+  await Promise.all(
+    eligible.map(sub =>
+      supabaseAdmin.from('submissions').update({
+        status: 'reviewed',
+        admin_gpa: sub.ocr_gpa,
+        final_gpa: sub.ocr_gpa,
+        reviewed_at: now,
+      } as any).eq('id', sub.id)
+    )
+  )
+
+  return res.json({ approved: eligible.length })
 }

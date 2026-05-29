@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getUserFromRequest } from '@/lib/apiAuth'
 import { sendEmail, verifyTransport, type EmailType } from '@/lib/email'
+import { getAppBaseUrl } from '@/lib/appUrl'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -68,9 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const deadline = new Date(semester.deadline).toLocaleString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   })
-  const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? 'localhost:3000') as string
-  const proto = host.includes('localhost') ? 'http' : 'https'
-  const submitUrl = `${proto}://${host}/submit/${semesterId}`
+  const submitUrl = `${getAppBaseUrl()}/submit/${semesterId}`
 
   // Verify SMTP connection before attempting any sends
   try {

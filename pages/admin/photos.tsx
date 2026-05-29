@@ -21,9 +21,17 @@ interface PhotoEntry {
   admin_notes: string | null
 }
 
+interface SemesterStorage {
+  id: string
+  name: string
+  photoCount: number
+  clearableCount: number
+}
+
 interface Props {
   photos: PhotoEntry[]
   semesters: { id: string; name: string }[]
+  storageStats: SemesterStorage[]
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -33,7 +41,7 @@ function StatusPill({ status }: { status: string }) {
   return <span className="badge-pending !text-[10px] !px-1.5 !py-0.5">Pending</span>
 }
 
-export default function PhotoArchivePage({ photos: initialPhotos, semesters }: Props) {
+export default function PhotoArchivePage({ photos: initialPhotos, semesters, storageStats: initialStats }: Props) {
   const [photos, setPhotos] = useState(initialPhotos)
   const [selected, setSelected] = useState<PhotoEntry | null>(null)
   const [semFilter, setSemFilter] = useState('all')
@@ -42,6 +50,9 @@ export default function PhotoArchivePage({ photos: initialPhotos, semesters }: P
   const [declining, setDeclining] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
   const [saving, setSaving] = useState(false)
+  const [storageStats, setStorageStats] = useState(initialStats)
+  const [clearing, setClearing] = useState<string | null>(null)
+  const [showStorage, setShowStorage] = useState(false)
 
   const filtered = useMemo(() => photos
     .filter(p => semFilter === 'all' || p.semester_id === semFilter)
@@ -85,8 +96,87 @@ export default function PhotoArchivePage({ photos: initialPhotos, semesters }: P
   const select = (p: PhotoEntry) => { setSelected(p); setDeclining(false); setDeclineReason('') }
   const deselect = () => { setSelected(null); setDeclining(false); setDeclineReason('') }
 
+  const clearPhotos = async (sem: SemesterStorage) => {
+    if (!window.confirm(
+      `Delete ${sem.clearableCount} photo${sem.clearableCount !== 1 ? 's' : ''} from "${sem.name}"?\n\nOnly reviewed and declined submissions are affected. Submission records and GPA data are kept.\n\nThis cannot be undone.`
+    )) return
+    setClearing(sem.id)
+    const res = await fetch('/api/admin/clear-photos', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semesterId: sem.id }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setPhotos(prev => prev.filter(p => p.semester_id !== sem.id || !['reviewed', 'declined'].includes(p.status)))
+      setStorageStats(prev => prev.map(s => s.id === sem.id ? { ...s, photoCount: s.photoCount - data.deleted, clearableCount: 0 } : s))
+      if (selected?.semester_id === sem.id) deselect()
+    }
+    setClearing(null)
+  }
+
   return (
     <AdminLayout title="Photo Archive">
+      {/* Storage management */}
+      <div className="mb-5">
+        <button
+          onClick={() => setShowStorage(v => !v)}
+          className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
+        >
+          <span>{showStorage ? '▾' : '▸'}</span> Manage Storage
+        </button>
+        {showStorage && (
+          <div className="mt-3 card !p-0 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-700 bg-slate-900/50">
+              <p className="text-white text-sm font-medium">Storage by Semester</p>
+              <p className="text-slate-500 text-xs mt-0.5">
+                Clearing removes photo files from storage. Submission records and GPA data are preserved.
+                Only reviewed and declined submissions are eligible — pending photos are never deleted.
+              </p>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-900/30">
+                  <th className="text-left px-4 py-2 text-slate-400 font-medium text-xs">Semester</th>
+                  <th className="text-center px-4 py-2 text-slate-400 font-medium text-xs">Total Photos</th>
+                  <th className="text-center px-4 py-2 text-slate-400 font-medium text-xs">Est. Size</th>
+                  <th className="text-center px-4 py-2 text-slate-400 font-medium text-xs">Clearable</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {storageStats.map(sem => (
+                  <tr key={sem.id} className="border-b border-slate-700/50 last:border-0">
+                    <td className="px-4 py-2.5 text-white text-sm">{sem.name}</td>
+                    <td className="px-4 py-2.5 text-center text-slate-300 text-sm">{sem.photoCount}</td>
+                    <td className="px-4 py-2.5 text-center text-slate-400 text-xs">~{Math.round(sem.photoCount * 0.5)} MB</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {sem.clearableCount > 0
+                        ? <span className="text-amber-400 text-xs font-medium">{sem.clearableCount} photos</span>
+                        : <span className="text-slate-600 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      {sem.clearableCount > 0 && (
+                        <button
+                          onClick={() => clearPhotos(sem)}
+                          disabled={clearing === sem.id}
+                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
+                        >
+                          {clearing === sem.id ? 'Clearing…' : 'Clear photos'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {storageStats.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500 text-sm">No photos stored.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-5">
         <input
@@ -286,5 +376,21 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     admin_notes: s.admin_notes ?? null,
   }))
 
-  return { props: { photos, semesters: semsRaw ?? [] } }
+  // Per-semester storage stats (only semesters that have photos)
+  const semMap = new Map((semsRaw ?? []).map((s: any) => [s.id, s.name]))
+  const statsBySem = new Map<string, { total: number; clearable: number }>()
+  for (const s of subsRaw ?? []) {
+    const cur = statsBySem.get(s.semester_id) ?? { total: 0, clearable: 0 }
+    cur.total++
+    if (s.status === 'reviewed' || s.status === 'declined') cur.clearable++
+    statsBySem.set(s.semester_id, cur)
+  }
+  const storageStats: SemesterStorage[] = Array.from(statsBySem.entries()).map(([id, { total, clearable }]) => ({
+    id,
+    name: semMap.get(id) ?? id,
+    photoCount: total,
+    clearableCount: clearable,
+  }))
+
+  return { props: { photos, semesters: semsRaw ?? [], storageStats } }
 }

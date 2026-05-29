@@ -95,7 +95,9 @@ export default function SignupPage() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">📚</div>
+          <div className="w-16 h-16 rounded-xl bg-amber-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
+            <span className="text-slate-900 font-black text-xl tracking-tight select-none">GP</span>
+          </div>
           <h1 className="text-3xl font-bold text-white">Create Account</h1>
           <p className="text-slate-400 mt-2">Join your chapter&apos;s grade portal</p>
         </div>

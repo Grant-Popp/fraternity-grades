@@ -219,6 +219,25 @@ function headerRow(sheet: ExcelJS.Worksheet, cols: string[], rowNum: number) {
   row.height = 24
 }
 
+function statusFill(status: string): ExcelJS.Fill {
+  switch (status) {
+    case 'reviewed':  return { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_GREEN } }
+    case 'pending':   return { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_YELLOW } }
+    case 'no_grade':  return { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_AMBER } }
+    case 'declined':  return { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_RED } }
+    default:          return { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_RED } }
+  }
+}
+function statusFontColor(status: string): string {
+  switch (status) {
+    case 'reviewed':  return GREEN
+    case 'pending':   return YELLOW
+    case 'no_grade':  return AMBER_TEXT
+    case 'declined':  return RED
+    default:          return RED
+  }
+}
+
 async function buildBarChartPng(
   yearData: Array<{ year: string; count: number; avg: number | null }>
 ): Promise<string | null> {
@@ -235,7 +254,7 @@ async function buildBarChartPng(
     const gridLines = [1, 2, 3, 4].map(g => {
       const y = toY(g)
       return `<line x1="${cL}" y1="${y.toFixed(1)}" x2="${cR}" y2="${y.toFixed(1)}" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="${(cL - 6).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="sans-serif" font-size="11" fill="#94A3B8">${g}.0</text>`
+<text x="${(cL - 6).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" fill="#94A3B8">${g}.0</text>`
     }).join('\n')
 
     const barsSvg = yearData.map(({ year, count, avg }, i) => {
@@ -243,8 +262,8 @@ async function buildBarChartPng(
       const cx = (x + barW / 2).toFixed(1)
       if (avg === null) {
         return `<rect x="${x.toFixed(1)}" y="${(cB - 6).toFixed(1)}" width="${barW}" height="6" fill="#CBD5E1" rx="2"/>
-<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748B">${year}</text>
-<text x="${cx}" y="${(cB - 10).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#94A3B8">N/A</text>`
+<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#64748B">${year}</text>
+<text x="${cx}" y="${(cB - 10).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#94A3B8">N/A</text>`
       }
       const barTop = toY(avg)
       const barH = cB - barTop
@@ -252,14 +271,14 @@ async function buildBarChartPng(
       const stroke = avg >= 3.0 ? '#16A34A' : avg >= 2.5 ? '#D97706' : '#DC2626'
       const tf     = avg >= 3.0 ? '#166534' : avg >= 2.5 ? '#92400E' : '#991B1B'
       return `<rect x="${x.toFixed(1)}" y="${barTop.toFixed(1)}" width="${barW}" height="${barH.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" rx="4"/>
-<text x="${cx}" y="${(barTop - 7).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="bold" fill="${tf}">${avg.toFixed(2)}</text>
-<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#334155">${year}</text>
-<text x="${cx}" y="${(cB + 28).toFixed(1)}" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#94A3B8">${count} mbrs</text>`
+<text x="${cx}" y="${(barTop - 7).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="12" font-weight="bold" fill="${tf}">${avg.toFixed(2)}</text>
+<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#334155">${year}</text>
+<text x="${cx}" y="${(cB + 28).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#94A3B8">${count} mbrs</text>`
     }).join('\n')
 
     const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#F8FAFC" rx="6"/>
-<text x="${W / 2}" y="22" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#0F172A">Avg GPA by Class Year</text>
+<text x="${W / 2}" y="22" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="13" font-weight="bold" fill="#0F172A">Avg GPA by Class Year</text>
 <line x1="${cL}" y1="${cT}" x2="${cL}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 <line x1="${cL}" y1="${cB}" x2="${cR}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 ${gridLines}
@@ -296,7 +315,7 @@ async function buildGpaTrendPng(
     const gridLines = [1.0, 2.0, 3.0, 4.0].map(g => {
       const y = toY(g)
       return `<line x1="${cL}" y1="${y.toFixed(1)}" x2="${cR}" y2="${y.toFixed(1)}" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="${cL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="Arial,sans-serif" font-size="11" fill="#94A3B8">${g.toFixed(1)}</text>`
+<text x="${cL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" fill="#94A3B8">${g.toFixed(1)}</text>`
     }).join('\n')
 
     // Trend line via linear regression
@@ -335,24 +354,24 @@ async function buildGpaTrendPng(
         const ac = diff > 0.05 ? '#4ADE80' : diff < -0.05 ? '#F87171' : '#94A3B8'
         const mx = (x + xAt(i - 1)) / 2
         const my = (y + toY(pts[i - 1].avg)) / 2 - 10
-        arrowSvg = `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="${ac}" opacity="0.8">${ch}</text>`
+        arrowSvg = `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="13" fill="${ac}" opacity="0.8">${ch}</text>`
       }
       return `${arrowSvg}
 <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${fill}" stroke="white" stroke-width="2"/>
-<text x="${x.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="${tf}">${p.avg.toFixed(2)}</text>
-<text x="${x.toFixed(1)}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="9" fill="#334155" transform="rotate(-15,${x.toFixed(1)},${(cB + 16).toFixed(1)})">${shortLabel}</text>`
+<text x="${x.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" font-weight="bold" fill="${tf}">${p.avg.toFixed(2)}</text>
+<text x="${x.toFixed(1)}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#334155" transform="rotate(-15,${x.toFixed(1)},${(cB + 16).toFixed(1)})">${shortLabel}</text>`
     }).join('\n')
 
     const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#F8FAFC" rx="8"/>
-<text x="${W / 2}" y="24" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#0F172A">Chapter GPA Trend Over Time</text>
+<text x="${W / 2}" y="24" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="14" font-weight="bold" fill="#0F172A">Chapter GPA Trend Over Time</text>
 <line x1="${cL}" y1="${cT}" x2="${cL}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 <line x1="${cL}" y1="${cB}" x2="${cR}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 ${gridLines}
 ${trendSvg}
 <polyline points="${polyPts}" fill="none" stroke="#0EA5E9" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 ${dotsSvg}
-<text x="${cR}" y="${H - 6}" text-anchor="end" font-family="Arial,sans-serif" font-size="9" fill="#94A3B8">dashed = trend direction</text>
+<text x="${cR}" y="${H - 6}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#94A3B8">dashed = trend direction</text>
 </svg>`
 
     return (await sharp(Buffer.from(svg)).png().toBuffer()).toString('base64')
@@ -518,34 +537,26 @@ export async function generateExcel(
     const roundMap = new Map<string, string>()
     rounds?.forEach(r => roundMap.set(r.id, r.name))
     const hasRounds = (rounds?.length ?? 0) > 0
+    const colCount = hasRounds ? 7 : 6
+    const lastCol = String.fromCharCode(64 + colCount)
 
     const ws = workbook.addWorksheet('Summary')
-    // Column layout varies based on whether this semester uses rounds
     if (hasRounds) {
       ws.columns = [
-        { key: 'name',      width: 24 },
-        { key: 'email',     width: 28 },
-        { key: 'year',      width: 14 },
-        { key: 'round',     width: 14 },
-        { key: 'gpa',       width: 10 },
-        { key: 'status',    width: 14 },
+        { key: 'name', width: 24 }, { key: 'email', width: 28 },
+        { key: 'year', width: 14 }, { key: 'round', width: 14 },
+        { key: 'gpa', width: 10 }, { key: 'status', width: 16 },
         { key: 'submitted', width: 22 },
       ]
     } else {
       ws.columns = [
-        { key: 'name',      width: 24 },
-        { key: 'email',     width: 28 },
-        { key: 'year',      width: 14 },
-        { key: 'gpa',       width: 10 },
-        { key: 'status',    width: 14 },
-        { key: 'submitted', width: 22 },
+        { key: 'name', width: 24 }, { key: 'email', width: 28 },
+        { key: 'year', width: 14 }, { key: 'gpa', width: 10 },
+        { key: 'status', width: 16 }, { key: 'submitted', width: 22 },
       ]
     }
 
-    const colCount = hasRounds ? 7 : 6
-    const lastCol = String.fromCharCode(64 + colCount) // A=65, so col 7 = G
-
-    // Title
+    // Row 1: Title
     ws.mergeCells(`A1:${lastCol}1`)
     const title = ws.getCell('A1')
     title.value = `Chapter Grade Report — ${semester.name}`
@@ -554,83 +565,122 @@ export async function generateExcel(
     title.alignment = { horizontal: 'center', vertical: 'middle' }
     ws.getRow(1).height = 30
 
+    // Row 2: Date meta
     ws.mergeCells(`A2:${lastCol}2`)
     ws.getCell('A2').value = `Deadline: ${new Date(semester.deadline).toLocaleString()}  |  Generated: ${new Date().toLocaleString()}`
     ws.getCell('A2').font = { italic: true, color: { argb: 'FF64748B' }, size: 10 }
     ws.getCell('A2').alignment = { horizontal: 'center' }
 
+    // ── Stats block (rows 3–7) ─────────────────────────────────
+    const gpas = sorted.map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((g): g is number => g !== null)
+    const chapterAvg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
+    const submittedCount = sorted.filter(m => subByMember.has(m.id)).length
+    const compliancePct = sorted.length > 0 ? Math.round((submittedCount / sorted.length) * 100) : 0
+    const yearList = ['Freshman', 'Sophomore', 'Junior', 'Senior'] as const
+    const yearAvgs = yearList.map(yr => {
+      const g = sorted.filter(m => m.class_year === yr).map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((v): v is number => v !== null)
+      return { year: yr, avg: g.length ? g.reduce((a, b) => a + b, 0) / g.length : null }
+    })
+
+    // Row 3: Stats section header
+    ws.mergeCells(`A3:${lastCol}3`)
+    ws.getCell('A3').value = 'CHAPTER STATISTICS'
+    ws.getCell('A3').font = { bold: true, size: 10, color: { argb: WHITE } }
+    ws.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK_NAVY } }
+    ws.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getRow(3).height = 20
+
+    // Row 4: Chapter GPA + submitted count
+    const r4 = ws.getRow(4)
+    r4.height = 22
+    r4.getCell(1).value = 'Chapter GPA'
+    r4.getCell(1).font = { bold: true, size: 11, color: { argb: DARK_NAVY } }
+    r4.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+    r4.getCell(2).value = chapterAvg !== null ? +chapterAvg.toFixed(2) : '—'
+    r4.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' }
+    if (chapterAvg !== null) {
+      r4.getCell(2).fill = gpaFill(chapterAvg)!
+      r4.getCell(2).font = { bold: true, size: 14, color: { argb: gpaFontColor(chapterAvg) } }
+    }
+    ws.mergeCells(`C4:${lastCol}4`)
+    r4.getCell(3).value = `Submitted: ${submittedCount} / ${sorted.length} (${compliancePct}%)`
+    r4.getCell(3).font = { italic: true, size: 10, color: { argb: 'FF64748B' } }
+    r4.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
+
+    // Rows 5–6: Year averages, 2 per row
+    const yearPairs: [typeof yearAvgs[0], typeof yearAvgs[0]][] = [[yearAvgs[0], yearAvgs[1]], [yearAvgs[2], yearAvgs[3]]]
+    yearPairs.forEach(([left, right], pi) => {
+      const r = ws.getRow(5 + pi)
+      r.height = 18
+      r.getCell(1).value = `${left.year} Avg`
+      r.getCell(1).font = { size: 10, color: { argb: 'FF64748B' }, italic: true }
+      r.getCell(2).value = left.avg !== null ? +left.avg.toFixed(2) : '—'
+      r.getCell(2).alignment = { horizontal: 'center' }
+      if (left.avg !== null) { r.getCell(2).fill = gpaFill(left.avg)!; r.getCell(2).font = { bold: true, size: 10, color: { argb: gpaFontColor(left.avg) } } }
+      r.getCell(3).value = `${right.year} Avg`
+      r.getCell(3).font = { size: 10, color: { argb: 'FF64748B' }, italic: true }
+      r.getCell(4).value = right.avg !== null ? +right.avg.toFixed(2) : '—'
+      r.getCell(4).alignment = { horizontal: 'center' }
+      if (right.avg !== null) { r.getCell(4).fill = gpaFill(right.avg)!; r.getCell(4).font = { bold: true, size: 10, color: { argb: gpaFontColor(right.avg) } } }
+    })
+
+    // Row 7: Spacer
+    ws.getRow(7).height = 5
+
+    // Row 8: Member headers
+    const HEADER_ROW = 8
+    const DATA_START = 9
     const headers = hasRounds
       ? ['Member Name', 'Email', 'Class Year', 'Round', 'GPA', 'Status', 'Submitted At']
       : ['Member Name', 'Email', 'Class Year', 'GPA', 'Status', 'Submitted At']
-    headerRow(ws, headers, 3)
+    headerRow(ws, headers, HEADER_ROW)
 
+    // Member data rows
+    const gpaColIdx = hasRounds ? 5 : 4
+    const statusColIdx = hasRounds ? 6 : 5
     sorted.forEach((m, i) => {
       const sub = subByMember.get(m.id)
       const gpa = sub?.final_gpa ?? null
-      const row = ws.getRow(4 + i)
+      const status = sub?.status ?? 'Not Submitted'
+      const row = ws.getRow(DATA_START + i)
+      const isEven = i % 2 === 0
+
+      row.getCell(1).value = m.full_name
+      row.getCell(1).font = { bold: true }
+      row.getCell(2).value = m.email
+      row.getCell(3).value = m.class_year
+      row.getCell(3).alignment = { horizontal: 'center' }
 
       if (hasRounds) {
-        const roundName = sub?.round_id ? (roundMap.get(sub.round_id) ?? '—') : (sub ? '—' : '')
-        row.getCell(1).value = m.full_name
-        row.getCell(2).value = m.email
-        row.getCell(3).value = m.class_year
-        row.getCell(4).value = roundName
-        row.getCell(5).value = gpa !== null ? +gpa.toFixed(2) : '—'
-        row.getCell(6).value = sub?.status ?? 'Not Submitted'
-        row.getCell(7).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
-        const gpaCell = row.getCell(5)
-        if (gpa !== null) { gpaCell.fill = gpaFill(gpa)!; gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true } }
-        gpaCell.alignment = { horizontal: 'center' }
-        row.getCell(3).alignment = { horizontal: 'center' }
+        row.getCell(4).value = sub?.round_id ? (roundMap.get(sub.round_id) ?? '—') : (sub ? '—' : '')
         row.getCell(4).alignment = { horizontal: 'center' }
-        row.getCell(6).alignment = { horizontal: 'center' }
+        row.getCell(7).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
         row.getCell(7).alignment = { horizontal: 'center' }
-        if (i % 2 === 0) [1,2,3,4,6,7].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } } })
       } else {
-        row.getCell(1).value = m.full_name
-        row.getCell(2).value = m.email
-        row.getCell(3).value = m.class_year
-        row.getCell(4).value = gpa !== null ? +gpa.toFixed(2) : '—'
-        row.getCell(5).value = sub?.status ?? 'Not Submitted'
         row.getCell(6).value = sub?.submitted_at ? new Date(sub.submitted_at).toLocaleString() : '—'
-        const gpaCell = row.getCell(4)
-        if (gpa !== null) { gpaCell.fill = gpaFill(gpa)!; gpaCell.font = { color: { argb: gpaFontColor(gpa) }, bold: true } }
-        gpaCell.alignment = { horizontal: 'center' }
-        row.getCell(3).alignment = { horizontal: 'center' }
-        row.getCell(5).alignment = { horizontal: 'center' }
         row.getCell(6).alignment = { horizontal: 'center' }
-        if (i % 2 === 0) [1,2,3,5,6].forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } } })
       }
+
+      // GPA cell
+      row.getCell(gpaColIdx).value = gpa !== null ? +gpa.toFixed(2) : '—'
+      row.getCell(gpaColIdx).alignment = { horizontal: 'center' }
+      if (gpa !== null) {
+        row.getCell(gpaColIdx).fill = gpaFill(gpa)!
+        row.getCell(gpaColIdx).font = { bold: true, color: { argb: gpaFontColor(gpa) } }
+      }
+
+      // Status cell (always colored)
+      row.getCell(statusColIdx).value = status.replace(/_/g, ' ')
+      row.getCell(statusColIdx).alignment = { horizontal: 'center' }
+      row.getCell(statusColIdx).fill = statusFill(status)
+      row.getCell(statusColIdx).font = { size: 10, bold: true, color: { argb: statusFontColor(status) } }
+
+      // Stripe non-GPA non-status columns
+      const stripeCols = hasRounds ? [1,2,3,4,7] : [1,2,3,6]
+      if (isEven) stripeCols.forEach(c => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } } })
     })
 
-    // Chapter averages footer
-    const gpaCol = hasRounds ? 5 : 4
-    const gpas = sorted.map(m => subByMember.get(m.id)?.final_gpa ?? null).filter((g): g is number => g !== null)
-    const chapterAvg = gpas.length ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
-    const afterData = 4 + sorted.length + 1
-
-    const avgRow = ws.getRow(afterData)
-    avgRow.getCell(1).value = 'Chapter Average'
-    avgRow.getCell(1).font = { bold: true }
-    avgRow.getCell(gpaCol).value = chapterAvg !== null ? +chapterAvg.toFixed(2) : '—'
-    avgRow.getCell(gpaCol).font = { bold: true }
-    avgRow.getCell(gpaCol).fill = gpaFill(chapterAvg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
-
-    const years = ['Freshman','Sophomore','Junior','Senior'] as const
-    years.forEach((yr, yi) => {
-      const yrGpas = sorted
-        .filter(m => m.class_year === yr)
-        .map(m => subByMember.get(m.id)?.final_gpa ?? null)
-        .filter((g): g is number => g !== null)
-      const avg = yrGpas.length ? yrGpas.reduce((a,b) => a+b, 0) / yrGpas.length : null
-      const r = ws.getRow(afterData + 1 + yi)
-      r.getCell(1).value = `${yr} Average`
-      r.getCell(1).font = { italic: true }
-      r.getCell(gpaCol).value = avg !== null ? +avg.toFixed(2) : '—'
-      r.getCell(gpaCol).fill = gpaFill(avg) ?? { type: 'pattern', pattern: 'solid', fgColor: { argb: GREY_BG } }
-    })
-
-    ws.views = [{ state: 'frozen', ySplit: 3 }]
+    ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }]
   }
 
   // ── By Class Year Sheet ────────────────────────────────────

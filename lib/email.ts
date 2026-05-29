@@ -100,8 +100,24 @@ function buildBody(opts: SendEmailOptions): string {
     <!DOCTYPE html>
     <html>
     <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f8fafc;">
-      <div style="background:#0f172a;padding:20px 24px;border-radius:12px 12px 0 0;">
-        <h1 style="color:#f59e0b;margin:0;font-size:20px;">Chapter Grade Portal</h1>
+      <div style="background:#0f172a;padding:20px 24px;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:14px;">
+        <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+          <path d="M13 72 C6 82 3 95 11 88 C15 78 19 73 13 72Z" fill="#AD0000"/>
+          <ellipse cx="41" cy="67" rx="26" ry="18" fill="#AD0000"/>
+          <circle cx="64" cy="44" r="20" fill="#AD0000"/>
+          <path d="M63 26 C65 14 70 5 67 13 C65 20 64 26 63 26Z" fill="#AD0000"/>
+          <path d="M55 27 C54 17 57 8 57 15 C56 21 55 26 55 27Z" fill="#AD0000"/>
+          <path d="M71 29 C77 19 81 12 77 18 C73 24 71 29 71 29Z" fill="#AD0000"/>
+          <path d="M15 70 Q35 82 58 78 Q37 87 13 77Z" fill="#8B0000"/>
+          <ellipse cx="75" cy="48" rx="11" ry="8" fill="#111"/>
+          <path d="M81 40 L98 35 L81 49Z" fill="#E8820C"/>
+          <circle cx="64" cy="38" r="4.5" fill="#111"/>
+          <circle cx="63" cy="37" r="1.8" fill="white"/>
+        </svg>
+        <div>
+          <p style="color:#AD0000;margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;">University of Louisville</p>
+          <h1 style="color:#f59e0b;margin:4px 0 0;font-size:18px;font-weight:700;">Chapter Grade Portal</h1>
+        </div>
       </div>
       <div style="background:#ffffff;padding:24px;border-radius:0 0 12px 12px;border:1px solid #e2e8f0;border-top:none;">
         ${bodies[type]}

@@ -1,12 +1,16 @@
 import { GetServerSideProps } from 'next'
 import { createPagesServerClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
+import CardinalLogo from '@/components/CardinalLogo'
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="text-center max-w-xl">
-        <div className="mb-6 text-7xl">📚</div>
+        <div className="mb-6 flex justify-center">
+          <CardinalLogo size={90} />
+        </div>
+        <p className="text-red-500/70 text-xs font-semibold tracking-widest uppercase mb-2">University of Louisville</p>
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
           Chapter <span className="text-amber-500">Grade Portal</span>
         </h1>

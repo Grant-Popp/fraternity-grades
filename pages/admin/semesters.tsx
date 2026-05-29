@@ -115,9 +115,10 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
       body: JSON.stringify({ semesterId, type, classYears: years }),
     })
     const data = await res.json()
+    const errorNote = data.errors?.length ? ` · ${data.errors.length} failed` : ''
     setEmailStatus(prev => ({
       ...prev,
-      [semesterId + type]: res.ok ? `✓ Sent ${data.sent}, skipped ${data.skipped}` : `Error: ${data.error}`,
+      [semesterId + type]: res.ok ? `✓ Sent ${data.sent}, skipped ${data.skipped}${errorNote}` : `Error: ${data.error}`,
     }))
   }
 

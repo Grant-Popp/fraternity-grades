@@ -68,7 +68,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const deadline = new Date(semester.deadline).toLocaleString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
   })
-  const submitUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/submit/${semesterId}`
+  const host = (req.headers['x-forwarded-host'] ?? req.headers.host ?? 'localhost:3000') as string
+  const proto = host.includes('localhost') ? 'http' : 'https'
+  const submitUrl = `${proto}://${host}/submit/${semesterId}`
+
+  // Verify SMTP connection before attempting any sends
+  try {
+    await (transporter as any).verify()
+  } catch (err: any) {
+    return res.status(500).json({ error: `SMTP connection failed: ${err.message}. Check GMAIL_USER and GMAIL_APP_PASSWORD environment variables.` })
+  }
 
   let sent = 0
   const errors: string[] = []

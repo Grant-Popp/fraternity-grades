@@ -2,6 +2,7 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import CardinalLogo from '@/components/CardinalLogo'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -27,9 +28,7 @@ export default function Layout({ children, title }: LayoutProps) {
       <nav className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14 gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
-            <div className="w-7 h-7 rounded-md bg-amber-500 flex items-center justify-center shrink-0">
-              <span className="text-slate-900 font-black text-xs select-none">GP</span>
-            </div>
+            <CardinalLogo size={28} />
             <span className="text-white font-semibold text-sm hidden xs:inline sm:inline">Grade Portal</span>
           </Link>
           <div className="flex items-center gap-3">

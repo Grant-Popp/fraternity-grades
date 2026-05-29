@@ -30,11 +30,18 @@ interface PastEntry {
   submission: Submission | null
 }
 
+interface PastSemesterGroup {
+  semesterId: string
+  semesterName: string
+  semesterGpa: number | null
+  rounds: PastEntry[]
+}
+
 interface Props {
   profile: Profile
   activeRounds: ActiveRoundEntry[]
   legacyActive: (Semester & { submission: Submission | null })[]
-  past: PastEntry[]
+  past: PastSemesterGroup[]
   isAtRisk: boolean
   gpaThreshold: number
 }
@@ -92,8 +99,10 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
   const [legacyActive, setLegacyActive] = useState(initialLegacy)
   const hasOpen = activeRounds.length > 0 || legacyActive.length > 0
 
+  const pastEntries = past.flatMap(g => g.rounds)
+
   const [latestGpa, previousGpa] = (() => {
-    const allSubs = [...activeRounds.map(r => r.submission), ...legacyActive.map(s => s.submission), ...past.map(e => e.submission)]
+    const allSubs = [...activeRounds.map(r => r.submission), ...legacyActive.map(s => s.submission), ...pastEntries.map(e => e.submission)]
     const withGpa = allSubs.filter((s): s is Submission => s?.final_gpa != null).reverse()
     return [withGpa[0]?.final_gpa ?? null, withGpa[1]?.final_gpa ?? null]
   })()
@@ -101,7 +110,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
   const submittedCount = [
     ...activeRounds.filter(r => r.submission),
     ...legacyActive.filter(s => s.submission),
-    ...past.filter(e => e.submission),
+    ...pastEntries.filter(e => e.submission),
   ].length
 
   return (
@@ -232,30 +241,50 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
                   </tr>
                 </thead>
                 <tbody>
-                  {past.map((entry, i) => {
-                    const isFirstInGroup = i === 0 || past[i - 1].semesterId !== entry.semesterId
-                    const isLastInGroup = i === past.length - 1 || past[i + 1].semesterId !== entry.semesterId
+                  {past.map((group, gi) => {
+                    const multiRound = group.rounds.length > 1
                     return (
-                      <tr key={`${entry.semesterId}-${entry.roundId ?? 'none'}`}
-                        className={`border-b border-slate-700/50 last:border-0 ${isFirstInGroup && i > 0 ? 'border-t border-slate-600' : ''}`}>
-                        <td className="px-4 py-3">
-                          {isFirstInGroup
-                            ? <span className="text-white">{entry.semesterName}</span>
-                            : <span className="text-slate-600 text-xs pl-2">↳</span>}
-                          {entry.roundName && (
-                            <span className={`text-amber-400 text-xs ${isFirstInGroup ? ' ml-2' : ' ml-1'}`}>{entry.roundName}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {entry.submission?.final_gpa != null
-                            ? <span className={`font-semibold ${gpaColorClass(entry.submission.final_gpa)}`}>{entry.submission.final_gpa.toFixed(2)}</span>
-                            : <span className="text-slate-500">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <StatusBadge submission={entry.submission} />
-                        </td>
-                        <td className="px-4 py-3 text-amber-300 text-xs max-w-xs">{entry.submission?.admin_notes ?? <span className="text-slate-600">—</span>}</td>
-                      </tr>
+                      <>
+                        {/* Semester header row — only when multiple rounds exist */}
+                        {multiRound && (
+                          <tr key={`hdr-${group.semesterId}`} className={`bg-slate-900/40 ${gi > 0 ? 'border-t border-slate-600' : 'border-b border-slate-700/50'}`}>
+                            <td className="px-4 py-2.5">
+                              <span className="text-white font-semibold">{group.semesterName}</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {group.semesterGpa != null
+                                ? <span className={`font-semibold ${gpaColorClass(group.semesterGpa)}`}>{group.semesterGpa.toFixed(2)}</span>
+                                : <span className="text-slate-500">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className="text-slate-500 text-xs">avg</span>
+                            </td>
+                            <td className="px-4 py-2.5" />
+                          </tr>
+                        )}
+                        {/* Per-round rows */}
+                        {group.rounds.map((entry, ri) => (
+                          <tr key={`${entry.semesterId}-${entry.roundId ?? 'none'}`}
+                            className={`border-b border-slate-700/50 last:border-0 ${!multiRound && gi > 0 ? 'border-t border-slate-600' : ''}`}>
+                            <td className="px-4 py-3">
+                              {multiRound ? (
+                                <span className="text-slate-400 text-xs pl-3">↳ {entry.roundName}</span>
+                              ) : (
+                                <span className="text-white">{entry.semesterName}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {entry.submission?.final_gpa != null
+                                ? <span className={`font-semibold ${gpaColorClass(entry.submission.final_gpa)}`}>{entry.submission.final_gpa.toFixed(2)}</span>
+                                : <span className="text-slate-500">—</span>}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <StatusBadge submission={entry.submission} />
+                            </td>
+                            <td className="px-4 py-3 text-amber-300 text-xs max-w-xs">{entry.submission?.admin_notes ?? <span className="text-slate-600">—</span>}</td>
+                          </tr>
+                        ))}
+                      </>
                     )
                   })}
                 </tbody>
@@ -330,21 +359,23 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     pastRoundsBySemId.get(r.semester_id)!.push(r)
   }
 
-  const past: PastEntry[] = []
-  for (const s of pastSems) {
-    const rounds = pastRoundsBySemId.get(s.id) ?? []
-    if (rounds.length > 0) {
-      for (const r of rounds) {
-        const sub = (submissions ?? []).find((sub: any) => sub.round_id === r.id) ?? null
-        past.push({ semesterId: s.id, semesterName: s.name, roundId: r.id, roundName: r.name, submission: sub })
-      }
-    } else {
-      const sub = (submissions ?? [])
-        .filter((sub: any) => sub.semester_id === s.id)
-        .sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0] ?? null
-      past.push({ semesterId: s.id, semesterName: s.name, roundId: null, roundName: null, submission: sub })
-    }
-  }
+  const past: PastSemesterGroup[] = pastSems.map(s => {
+    const semRounds = pastRoundsBySemId.get(s.id) ?? []
+    const entries: PastEntry[] = semRounds.length > 0
+      ? semRounds.map(r => {
+          const sub = (submissions ?? []).find((sub: any) => sub.round_id === r.id) ?? null
+          return { semesterId: s.id, semesterName: s.name, roundId: r.id, roundName: r.name, submission: sub }
+        })
+      : [{
+          semesterId: s.id, semesterName: s.name, roundId: null, roundName: null,
+          submission: (submissions ?? [])
+            .filter((sub: any) => sub.semester_id === s.id)
+            .sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0] ?? null,
+        }]
+    const gpas = entries.map(e => e.submission?.final_gpa).filter((g): g is number => g != null)
+    const semesterGpa = gpas.length > 0 ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
+    return { semesterId: s.id, semesterName: s.name, semesterGpa, rounds: entries }
+  })
 
   // At-risk check: compare latest reviewed GPA against chapter threshold
   let isAtRisk = false

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import CardinalLogo from '@/components/CardinalLogo'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -35,7 +36,10 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">📚</div>
+          <div className="flex justify-center mb-3">
+            <CardinalLogo size={64} />
+          </div>
+          <p className="text-red-500/70 text-[11px] font-semibold tracking-widest uppercase mb-1">University of Louisville</p>
           <h1 className="text-3xl font-bold text-white">Welcome Back</h1>
           <p className="text-slate-400 mt-2">Sign in to your grade portal</p>
         </div>

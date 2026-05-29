@@ -188,6 +188,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
   const [filterSem, setFilterSem] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterYear, setFilterYear] = useState('all')
+  const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [loadingPhoto, setLoadingPhoto] = useState<string | null>(null)
@@ -203,12 +204,26 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
     setAlerts(prev => prev.filter(a => a.id !== alertId))
   }
 
-  const filtered = subs.filter(s => {
-    if (filterSem !== 'all' && s.semester_id !== filterSem) return false
-    if (filterStatus !== 'all' && s.status !== filterStatus) return false
-    if (filterYear !== 'all' && s.member_class_year !== filterYear) return false
-    return true
-  })
+  const flaggedCount = subs.filter(s => s.duplicate_flag && s.status === 'pending').length
+
+  const filtered = subs
+    .filter(s => {
+      if (filterSem !== 'all' && s.semester_id !== filterSem) return false
+      if (filterStatus === 'flagged') { if (!s.duplicate_flag) return false }
+      else if (filterStatus !== 'all') { if (s.status !== filterStatus) return false }
+      if (filterYear !== 'all' && s.member_class_year !== filterYear) return false
+      if (search.trim()) {
+        const q = search.trim().toLowerCase()
+        if (!s.member_name.toLowerCase().includes(q)) return false
+      }
+      return true
+    })
+    // Flagged pending submissions always sort to the top
+    .sort((a, b) => {
+      const aFlag = a.duplicate_flag && a.status === 'pending' ? 0 : 1
+      const bFlag = b.duplicate_flag && b.status === 'pending' ? 0 : 1
+      return aFlag - bFlag
+    })
 
   const handleViewPhoto = async (subId: string) => {
     if (expandedId === subId) { setExpandedId(null); return }
@@ -288,6 +303,14 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
+        {/* Name search */}
+        <input
+          className="input !w-44"
+          type="text"
+          placeholder="Search member…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
         <select className="input !w-auto" value={filterSem} onChange={e => { setFilterSem(e.target.value); setBulkResult(null) }}>
           <option value="all">All Semesters</option>
           {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -298,12 +321,23 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
           <option value="reviewed">Reviewed</option>
           <option value="no_grade">No Grade</option>
           <option value="declined">Declined</option>
+          <option value="flagged">⚠ Flagged</option>
         </select>
         <select className="input !w-auto" value={filterYear} onChange={e => setFilterYear(e.target.value)}>
           <option value="all">All Years</option>
           {['Freshman','Sophomore','Junior','Senior'].map(yr => <option key={yr}>{yr}</option>)}
         </select>
-        <span className="text-slate-400 text-sm self-center">{filtered.length} results</span>
+        <div className="flex items-center gap-3 self-center">
+          <span className="text-slate-400 text-sm">{filtered.length} results</span>
+          {flaggedCount > 0 && (
+            <button
+              onClick={() => setFilterStatus('flagged')}
+              className="text-xs bg-amber-900/40 border border-amber-700/50 text-amber-400 px-2.5 py-1 rounded-full hover:bg-amber-900/70 transition-colors"
+            >
+              ⚠ {flaggedCount} need review
+            </button>
+          )}
+        </div>
         {filterSem !== 'all' && (
           <div className="flex items-center gap-2 ml-auto">
             <button

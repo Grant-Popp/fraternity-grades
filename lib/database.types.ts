@@ -82,6 +82,8 @@ export type EmailLog = {
   member_id: string
   sent_at: string
   type: 'reminder' | 'deadline_warning' | 'confirmation'
+  status: 'sent' | 'failed'
+  error_message: string | null
 }
 
 // Supabase generic type — simple pass-through so createPagesBrowserClient is happy
@@ -91,7 +93,7 @@ export type Database = {
       profiles: { Row: Profile; Insert: Omit<Profile, 'created_at'>; Update: Partial<Profile> }
       semesters: { Row: Semester; Insert: Omit<Semester, 'id' | 'created_at'>; Update: Partial<Semester> }
       submissions: { Row: Submission; Insert: Omit<Submission, 'id' | 'submitted_at'>; Update: Partial<Submission> }
-      email_logs: { Row: EmailLog; Insert: Omit<EmailLog, 'id' | 'sent_at'>; Update: Partial<EmailLog> }
+      email_logs: { Row: EmailLog; Insert: Omit<EmailLog, 'id' | 'sent_at'> & { status?: 'sent' | 'failed'; error_message?: string | null }; Update: Partial<EmailLog> }
     }
   }
 }

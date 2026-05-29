@@ -15,7 +15,7 @@ interface Props {
   declinedReason: string | null
 }
 
-type Step = 'course_entry' | 'course_review' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'not_posted' | 'done'
+type Step = 'course_entry' | 'course_review' | 'per_course' | 'choose' | 'ocr' | 'confirm' | 'no_grade' | 'not_posted' | 'done'
 
 interface CourseRow {
   key: string
@@ -34,10 +34,21 @@ interface OcrState {
   directGpa: number | null
 }
 
+interface PerCoursePic {
+  file: File | null
+  preview: string | null
+  grade: string | null
+  rawText: string
+  noGrade: boolean
+  loading: boolean
+}
+
 export default function SubmitPage({ semester, alreadySubmitted, isFinalized, activeRound, memberCourses: initialCourses, declinedReason }: Props) {
   const router = useRouter()
   const submitLockRef = useRef(false)
   const changePhotoInputRef = useRef<HTMLInputElement>(null)
+  const uploadingForCourseRef = useRef<string | null>(null)
+  const perCourseInputRef = useRef<HTMLInputElement>(null)
 
   const getInitialStep = (): Step => {
     if (!activeRound) return 'choose'
@@ -61,13 +72,15 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
   const [showAddCourse, setShowAddCourse] = useState(false)
   const [newCourseRows, setNewCourseRows] = useState<CourseRow[]>([{ key: '1', course_id: '', course_name: '', credits: '' }])
   const [addCourseError, setAddCourseError] = useState('')
-  // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({ course_id: '', course_name: '', credits: '' })
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
 
-  // Photo/OCR state
+  // Per-course photo state (round-based semesters)
+  const [perCoursePics, setPerCoursePics] = useState<Record<string, PerCoursePic>>({})
+
+  // Single-photo state (legacy non-round semesters)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [ocrFailed, setOcrFailed] = useState(false)
@@ -87,6 +100,12 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
 
   const activeDeadline = activeRound?.deadline ?? semester.deadline
   const isPastDeadline = new Date(activeDeadline) < new Date()
+
+  const activeCourses = courses.filter(c => c.status === 'active')
+  const allCoursesHandled = activeCourses.length > 0 && activeCourses.every(c => {
+    const p = perCoursePics[c.course_id]
+    return p?.noGrade || (p?.file && !p.loading)
+  })
 
   // ── Course Entry ──────────────────────────────────────────
   const addCourseRow = () =>
@@ -123,8 +142,9 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
     })
     const data = await res.json()
     if (!res.ok) { setCourseEntryError(data.error); setSavingCourses(false); return }
+    if (data.courses?.length) setCourses(data.courses)
     setSavingCourses(false)
-    setStep('choose')
+    setStep('per_course')
   }
 
   // ── Course Review / Drops ─────────────────────────────────
@@ -169,7 +189,6 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
   }
 
   const handleContinueFromReview = async () => {
-    // Validate any new courses before proceeding
     const filledNew = newCourseRows.filter(r => r.course_id.trim() || r.course_name.trim() || r.credits.trim())
     if (showAddCourse && filledNew.length > 0) {
       setAddCourseError('')
@@ -190,7 +209,6 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
           body: JSON.stringify({ semesterId: semester.id, courseId }),
         })
       }
-      // Mark dropped courses in local state
       setCourses(prev => prev.map(c => pendingDrops.includes(c.course_id) ? { ...c, status: 'dropped' as const } : c))
       setPendingDrops([])
     }
@@ -208,7 +226,6 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
         }),
       })
       if (saveRes.ok) {
-        // Append new courses to local state so they appear in the no-grade checkboxes
         const now = new Date().toISOString()
         const newEntries = filledNew.map((r, i) => ({
           id: `temp-${Date.now()}-${i}`,
@@ -227,10 +244,106 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
       }
     }
     setSavingDrops(false)
-    setStep('choose')
+    setStep('per_course')
   }
 
-  // ── Photo / OCR ───────────────────────────────────────────
+  // ── Per-Course Photo Handlers ─────────────────────────────
+  const triggerCourseUpload = (courseId: string) => {
+    uploadingForCourseRef.current = courseId
+    perCourseInputRef.current?.click()
+  }
+
+  const handlePerCourseFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    const courseId = uploadingForCourseRef.current
+    if (!f || !courseId) return
+    e.target.value = ''
+    uploadingForCourseRef.current = null
+
+    if (f.size > 5 * 1024 * 1024) { setError('File is too large. Max 5MB.'); return }
+
+    const previewUrl = URL.createObjectURL(f)
+    setPerCoursePics(prev => {
+      if (prev[courseId]?.preview) URL.revokeObjectURL(prev[courseId].preview!)
+      return { ...prev, [courseId]: { file: f, preview: previewUrl, grade: null, rawText: '', noGrade: false, loading: true } }
+    })
+
+    try {
+      const { runOcr } = await import('@/lib/ocr')
+      const result = await runOcr(f)
+      setPerCoursePics(prev => ({
+        ...prev,
+        [courseId]: { ...prev[courseId], loading: false, grade: result.detectedGrade ?? null, rawText: result.rawText },
+      }))
+    } catch {
+      setPerCoursePics(prev => ({ ...prev, [courseId]: { ...prev[courseId], loading: false } }))
+    }
+  }
+
+  const toggleCourseNoGrade = (courseId: string) => {
+    setPerCoursePics(prev => {
+      const cur = prev[courseId] ?? { file: null, preview: null, grade: null, rawText: '', noGrade: false, loading: false }
+      return { ...prev, [courseId]: { ...cur, noGrade: !cur.noGrade } }
+    })
+  }
+
+  const handleSubmitPerCourse = async () => {
+    if (submitLockRef.current) return
+    submitLockRef.current = true
+    setSubmitting(true)
+    setError('')
+
+    const allNoGrade = activeCourses.length === 0 || activeCourses.every(c => perCoursePics[c.course_id]?.noGrade)
+
+    if (allNoGrade) {
+      const res = await fetch('/api/submissions/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ semesterId: semester.id, noGrade: true, roundId: activeRound?.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Submission failed.'); submitLockRef.current = false; setSubmitting(false); return }
+      setSubmittedAt(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
+      setStep('done')
+      submitLockRef.current = false
+      setSubmitting(false)
+      return
+    }
+
+    const courseGrades: Record<string, string> = {}
+    const allRawTexts: string[] = []
+    let firstFile: File | null = null
+
+    for (const c of activeCourses) {
+      const p = perCoursePics[c.course_id]
+      if (p?.noGrade) {
+        courseGrades[c.course_id] = 'N/A'
+      } else if (p?.file) {
+        if (!firstFile) firstFile = p.file
+        if (p.grade) courseGrades[c.course_id] = p.grade
+        if (p.rawText) allRawTexts.push(p.rawText)
+      }
+    }
+
+    if (!firstFile) { setError('Please upload at least one photo.'); submitLockRef.current = false; setSubmitting(false); return }
+
+    const formData = new FormData()
+    formData.append('file', firstFile)
+    formData.append('semesterId', semester.id)
+    formData.append('ocrRawText', allRawTexts.join('\n').substring(0, 5000))
+    formData.append('courseGrades', JSON.stringify(courseGrades))
+    if (activeRound) formData.append('roundId', activeRound.id)
+
+    const res = await fetch('/api/submissions/create', { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) { setError(data.error ?? 'Submission failed.'); submitLockRef.current = false; setSubmitting(false); return }
+    setSubmittedAt(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
+    setStep('done')
+    submitLockRef.current = false
+    setSubmitting(false)
+  }
+
+  // ── Single-Photo / OCR (legacy non-round semesters) ───────
   const handleClearPhoto = () => {
     if (preview) URL.revokeObjectURL(preview)
     setFile(null)
@@ -350,7 +463,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
             Your submission for <strong className="text-white">{pageTitle}</strong> has been reviewed and approved.
           </p>
           <p className="text-slate-500 text-xs">No further action is needed. Contact the VP of Academics &amp; Scholarship if you believe there is an error.</p>
-          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
+          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">← Back to Dashboard</button>
         </div>
       </Layout>
     )
@@ -366,7 +479,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
             You&apos;ve already submitted grades for {pageTitle}.
             {activeRound && ' The VP of Academics & Scholarship will open a new round when it\'s time to check again.'}
           </p>
-          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
+          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">← Back to Dashboard</button>
         </div>
       </Layout>
     )
@@ -379,7 +492,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
           <p className="text-4xl mb-3">⏰</p>
           <p className="text-white font-semibold text-lg">Deadline has passed</p>
           <p className="text-slate-400 text-sm mt-1">The submission window for {pageTitle} is closed.</p>
-          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
+          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">← Back to Dashboard</button>
         </div>
       </Layout>
     )
@@ -398,7 +511,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
             <p className="text-slate-500 text-xs mb-2">Submitted {submittedAt}</p>
           )}
           <p className="text-slate-400 text-sm mb-6">The VP of Academics &amp; Scholarship will review them shortly. A confirmation email has been sent to your address.</p>
-          <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
+          <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">← Back to Dashboard</button>
         </div>
       </Layout>
     )
@@ -436,7 +549,10 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
         {/* Step: Enter courses (first time) */}
         {step === 'course_entry' && (
           <div className="card">
-            <h3 className="font-semibold text-white mb-1">Enter Your Courses</h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-white">Enter Your Courses</h3>
+              <button onClick={() => router.push('/dashboard')} className="text-xs text-slate-400 hover:text-slate-200 transition-colors">← Dashboard</button>
+            </div>
             <p className="text-slate-400 text-sm mb-4">
               List every class you&apos;re enrolled in this semester. You only need to do this once — future rounds will remember your course list.
             </p>
@@ -459,9 +575,9 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                     <input
                       className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
                       placeholder="3"
-                      type="number"
-                      min={1}
-                      max={6}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={row.credits}
                       onChange={e => updateCourseRow(row.key, 'credits', e.target.value)}
                     />
@@ -495,7 +611,10 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
         {/* Step: Review courses (subsequent rounds) */}
         {step === 'course_review' && (
           <div className="card">
-            <h3 className="font-semibold text-white mb-1">Your Courses — {activeRound?.name}</h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-white">Your Courses — {activeRound?.name}</h3>
+              <button onClick={() => router.push('/dashboard')} className="text-xs text-slate-400 hover:text-slate-200 transition-colors">← Dashboard</button>
+            </div>
             <p className="text-slate-400 text-sm mb-4">
               Review your course list. If you&apos;ve dropped a class since last round, mark it here.
             </p>
@@ -520,9 +639,9 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                           <input
                             className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
                             placeholder="3"
-                            type="number"
-                            min={1}
-                            max={6}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={editValues.credits}
                             onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
                           />
@@ -620,9 +739,9 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                         <input
                           className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
                           placeholder="3"
-                          type="number"
-                          min={1}
-                          max={6}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.credits}
                           onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, credits: e.target.value } : r))}
                         />
@@ -663,24 +782,148 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
           </div>
         )}
 
-        {/* Step: Choose upload path */}
+        {/* Step: Per-course photo upload (round-based semesters) */}
+        {step === 'per_course' && (
+          <div className="space-y-4">
+            <div className="card">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-white">Upload Grades by Course</h3>
+                <button
+                  onClick={() => activeCourses.length > 0 ? setStep('course_review') : router.push('/dashboard')}
+                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  ← Back
+                </button>
+              </div>
+              <p className="text-slate-400 text-sm mb-4">
+                Upload a photo for each course showing your grade. Tap "No grade" if that course hasn&apos;t posted grades yet.
+              </p>
+
+              {/* Shared hidden file input for all course rows */}
+              <input
+                ref={perCourseInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePerCourseFile}
+              />
+
+              {activeCourses.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-slate-400 text-sm">No active courses found. Go back and verify your course list.</p>
+                  <button onClick={() => setStep('course_review')} className="btn-secondary mt-3 text-sm">← Review Courses</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeCourses.map(c => {
+                    const p = perCoursePics[c.course_id]
+                    const handled = p?.noGrade || (p?.file && !p.loading)
+                    return (
+                      <div
+                        key={c.course_id}
+                        className={`rounded-lg border p-3 transition-colors ${handled ? 'border-green-800/50 bg-green-900/5' : 'border-slate-700 bg-slate-800/30'}`}
+                      >
+                        <div className="flex gap-3 items-start">
+                          {/* Thumbnail */}
+                          {p?.preview && !p.noGrade && (
+                            <div className="shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={p.preview} className="w-14 h-14 object-cover rounded border border-slate-700" alt="" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white font-medium text-sm leading-tight">{c.course_id} — {c.course_name}</p>
+                            <p className="text-slate-500 text-xs mt-0.5">{c.credits} credit{c.credits !== 1 ? 's' : ''}</p>
+                            {p?.loading && (
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
+                                <span className="text-amber-400 text-xs">Scanning…</span>
+                              </div>
+                            )}
+                            {!p?.loading && p?.grade && !p.noGrade && (
+                              <p className="text-green-400 text-xs mt-1.5 font-medium">✓ {p.grade} detected</p>
+                            )}
+                            {!p?.loading && p?.file && !p.grade && !p.noGrade && (
+                              <p className="text-slate-400 text-xs mt-1.5">Photo uploaded — VP will review</p>
+                            )}
+                            {p?.noGrade && (
+                              <p className="text-amber-400 text-xs mt-1.5">No grade posted yet</p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-1.5 shrink-0">
+                            <button
+                              onClick={() => triggerCourseUpload(c.course_id)}
+                              disabled={p?.loading}
+                              className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-600 text-slate-300 hover:border-amber-500 hover:text-amber-300 transition-colors disabled:opacity-40 whitespace-nowrap"
+                            >
+                              {p?.file && !p.noGrade ? '↺ Change' : '📷 Upload'}
+                            </button>
+                            <button
+                              onClick={() => toggleCourseNoGrade(c.course_id)}
+                              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
+                                p?.noGrade
+                                  ? 'bg-amber-900/20 border-amber-600 text-amber-300'
+                                  : 'border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+                              }`}
+                            >
+                              {p?.noGrade ? '✓ No grade' : 'No grade'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
+
+            {!allCoursesHandled && activeCourses.length > 0 && (
+              <p className="text-slate-500 text-xs text-center">Upload a photo or tap "No grade" for every course to submit</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => activeCourses.length > 0 ? setStep('course_review') : router.push('/dashboard')}
+                className="btn-secondary flex-1"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleSubmitPerCourse}
+                disabled={submitting || !allCoursesHandled}
+                className="btn-primary flex-1"
+              >
+                {submitting ? 'Submitting…' : 'Submit Grades'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step: Choose upload path (legacy non-round semesters) */}
         {step === 'choose' && (
-          <div className="grid md:grid-cols-2 gap-4">
-            <label
-              htmlFor="grade-photo"
-              className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer block"
-            >
-              <p className="text-3xl mb-3">📷</p>
-              <p className="font-bold text-white text-lg">Upload Blackboard Screenshot</p>
-              <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
-            </label>
-            <button
-              onClick={() => setStep('no_grade')}
-              className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
-            >
-              <p className="text-3xl mb-3">🚫</p>
-              <p className="font-bold text-white text-lg">No Grades for Any Course Yet</p>
-              <p className="text-slate-400 text-sm mt-1">Grades haven&apos;t been posted for any of your courses yet. This will be noted by the VP of Academics & Scholarship.</p>
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
+              <label
+                htmlFor="grade-photo"
+                className="card text-left hover:border-amber-500 border-2 border-transparent transition-colors cursor-pointer block"
+              >
+                <p className="text-3xl mb-3">📷</p>
+                <p className="font-bold text-white text-lg">Upload Blackboard Screenshot</p>
+                <p className="text-slate-400 text-sm mt-1">Take a screenshot (not a camera photo) of your Blackboard grades page. We&apos;ll read your GPA automatically.</p>
+              </label>
+              <button
+                onClick={() => setStep('no_grade')}
+                className="card text-left hover:border-slate-500 border-2 border-transparent transition-colors cursor-pointer"
+              >
+                <p className="text-3xl mb-3">🚫</p>
+                <p className="font-bold text-white text-lg">No Grades for Any Course Yet</p>
+                <p className="text-slate-400 text-sm mt-1">Grades haven&apos;t been posted for any of your courses yet. This will be noted by the VP of Academics & Scholarship.</p>
+              </button>
+            </div>
+            <button onClick={() => router.push('/dashboard')} className="btn-secondary w-full text-sm">
+              ← Back to Dashboard
             </button>
           </div>
         )}
@@ -708,7 +951,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
           }}
         />
 
-        {/* Step: Confirm OCR result */}
+        {/* Step: Confirm OCR result (legacy non-round path) */}
         {step === 'confirm' && ocrState && (
           <div className="space-y-4">
             {preview && (
@@ -743,7 +986,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                   {confidenceLabel[ocrState.confidence]}
                 </span>
               </div>
-                <div>
+              <div>
                 <label className="label">Detected Grade</label>
                 {lowQualityFlag ? (
                   <p className="text-amber-400 text-sm bg-amber-900/20 px-3 py-2 rounded-lg">
@@ -792,7 +1035,6 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                 </p>
               )}
             </div>
-            {/* Per-course no-grade flags */}
             {courses.filter(c => c.status === 'active').length > 0 && (
               <div className="card">
                 <h3 className="font-semibold text-white mb-1">Any courses without a grade yet?</h3>
@@ -859,7 +1101,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
               Come back before <strong className="text-amber-400">{new Date(activeDeadline).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</strong> to submit your grades once they&apos;re posted.
             </p>
             <p className="text-slate-500 text-xs mb-6">Nothing has been recorded — you can return to this page at any time before the deadline.</p>
-            <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">Back to Dashboard</button>
+            <button onClick={() => router.push('/dashboard')} className="btn-primary px-8">← Back to Dashboard</button>
             <button onClick={() => setStep('choose')} className="btn-secondary px-6 ml-3">← Back</button>
           </div>
         )}
@@ -899,7 +1141,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
   const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
 
-  // Find the active round for this semester — use admin client to bypass RLS
   const { data: activeRound } = await admin
     .from('semester_rounds')
     .select('*')
@@ -909,8 +1150,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .limit(1)
     .maybeSingle()
 
-  // Check for existing submission (per-round if round exists, per-semester otherwise)
-  // Declined → allow resubmission. Reviewed → show finalized screen. Pending/no_grade → already submitted.
   let alreadySubmitted = false
   let isFinalized = false
   let declinedReason: string | null = null
@@ -936,7 +1175,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     }
   }
 
-  // Load member's course list for this semester
   const { data: memberCourses } = await supabase
     .from('member_courses')
     .select('*')

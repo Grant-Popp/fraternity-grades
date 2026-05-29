@@ -401,6 +401,7 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
         .react-datepicker__time-list-item--selected { background: #f59e0b !important; color: #0f172a !important; }
         .react-datepicker__navigation-icon::before { border-color: #94a3b8; }
         .react-datepicker__day--outside-month { color: #475569; }
+        .react-datepicker__portal { align-items: flex-start !important; padding-top: 40px; overflow-y: auto; }
       `}</style>
 
       {/* Create form */}

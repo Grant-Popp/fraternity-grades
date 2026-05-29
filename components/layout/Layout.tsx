@@ -32,17 +32,21 @@ export default function Layout({ children, title }: LayoutProps) {
             <span className="text-white font-semibold text-sm hidden xs:inline sm:inline">Grade Portal</span>
           </Link>
           <div className="flex items-center gap-3">
-            {router.pathname === '/dashboard' ? (
-              <span className="text-sm text-amber-400 font-semibold">Dashboard</span>
-            ) : (
-              <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white transition-colors">Dashboard</Link>
-            )}
-            {router.pathname === '/profile' ? (
-              <span className="text-sm text-amber-400 font-semibold">Profile</span>
-            ) : (
-              <Link href="/profile" className="text-sm text-slate-300 hover:text-white transition-colors">Profile</Link>
-            )}
-            <span className="text-slate-500 text-xs hidden sm:inline">{email}</span>
+            {/* Nav links — hidden on mobile to keep nav slim */}
+            <div className="hidden sm:flex items-center gap-3">
+              {router.pathname === '/dashboard' ? (
+                <span className="text-sm text-amber-400 font-semibold">Dashboard</span>
+              ) : (
+                <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white transition-colors">Dashboard</Link>
+              )}
+              {router.pathname === '/profile' ? (
+                <span className="text-sm text-amber-400 font-semibold">Profile</span>
+              ) : (
+                <Link href="/profile" className="text-sm text-slate-300 hover:text-white transition-colors">Profile</Link>
+              )}
+              <span className="text-slate-500 text-xs">{email}</span>
+            </div>
+            {/* Sign Out — always visible */}
             <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-red-400 transition-colors">
               Sign Out
             </button>

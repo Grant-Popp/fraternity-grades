@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { getUserFromRequest } from '@/lib/apiAuth'
-import { sendEmail, type EmailType } from '@/lib/email'
+import { sendEmail, verifyTransport, type EmailType } from '@/lib/email'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // Verify SMTP connection before attempting any sends
   try {
-    await (transporter as any).verify()
+    await verifyTransport()
   } catch (err: any) {
     return res.status(500).json({ error: `SMTP connection failed: ${err.message}. Check GMAIL_USER and GMAIL_APP_PASSWORD environment variables.` })
   }

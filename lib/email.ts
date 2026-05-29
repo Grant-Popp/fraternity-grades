@@ -129,6 +129,10 @@ function buildBody(opts: SendEmailOptions): string {
   `
 }
 
+export async function verifyTransport() {
+  await transporter.verify()
+}
+
 export async function sendEmail(opts: SendEmailOptions) {
   await transporter.sendMail({
     from: `"Chapter Academics" <${process.env.GMAIL_USER}>`,

@@ -433,9 +433,9 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     if (!reviewedBySemId.has(entry.semesterId)) reviewedBySemId.set(entry.semesterId, [])
     reviewedBySemId.get(entry.semesterId)!.push(entry)
   }
-  for (const entries of reviewedBySemId.values()) {
+  Array.from(reviewedBySemId.values()).forEach(entries => {
     entries.sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0))
-  }
+  })
   const reviewedPastGroups: PastSemesterGroup[] = Array.from(reviewedBySemId.entries()).map(([semId, entries]) => {
     const gpas = entries.map(e => e.submission?.final_gpa).filter((g): g is number => g != null)
     const semesterGpa = gpas.length > 0 ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null

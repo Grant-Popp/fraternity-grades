@@ -2,6 +2,7 @@ import { GetServerSideProps } from 'next'
 import { requireAdmin } from '@/lib/auth'
 import AdminLayout from '@/components/layout/AdminLayout'
 import { useState } from 'react'
+import Link from 'next/link'
 import { gpaColorClass, gradeToGpa, GRADE_MAP } from '@/lib/gpa'
 import type { Submission, Profile, Semester, DropAlert } from '@/lib/database.types'
 
@@ -368,7 +369,11 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
               {filtered.map(s => (
                 <>
                   <tr key={s.id} className={`border-b border-slate-700/50 hover:bg-slate-700/20 ${expandedId === s.id ? 'bg-slate-800/40' : ''}`}>
-                    <td className="px-4 py-3 text-white font-medium">{s.member_name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link href={`/admin/members/${s.member_id}`} className="text-white hover:text-amber-400 transition-colors">
+                        {s.member_name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-slate-300">{s.member_class_year}</td>
                     <td className="px-4 py-3 text-slate-300">{s.semester_name}</td>
                     <td className="px-4 py-3 text-slate-400 whitespace-nowrap text-xs">

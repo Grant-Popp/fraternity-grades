@@ -27,6 +27,7 @@ interface PastEntry {
   semesterName: string
   roundId: string | null
   roundName: string | null
+  roundNumber: number | null
   submission: Submission | null
 }
 
@@ -347,22 +348,44 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const subBySemId = new Map((submissions ?? []).filter((s: any) => !s.round_id).map((s: any) => [s.semester_id, s]))
   const coursesEnteredFor = new Set((courseRows ?? []).map((c: any) => c.semester_id))
 
-  // Active rounds — shown regardless of semester.is_active so closing a semester
-  // doesn't hide a round the admin has explicitly marked active
+  // Active rounds — reviewed submissions move to Past Semesters; only latest
+  // non-reviewed round per semester shown (robust against multiple open rounds)
   const roundSemesterIds = new Set<string>()
-  const activeRounds: ActiveRoundEntry[] = (activeRoundsRaw ?? []).flatMap((r: any) => {
+  const reviewedActiveEntries: PastEntry[] = []
+  const activeRounds: ActiveRoundEntry[] = []
+  const activeRoundSemIds = new Set<string>()
+
+  for (const r of (activeRoundsRaw ?? [])) {
     const sem = semMap.get(r.semester_id)
-    if (!sem) return []
-    if (sem.required_years?.length && !sem.required_years.includes(memberYear)) return []
+    if (!sem) continue
+    if (sem.required_years?.length && !sem.required_years.includes(memberYear)) continue
     roundSemesterIds.add(r.semester_id)
-    return [{
-      round: r,
-      semesterName: sem.name,
-      semesterId: r.semester_id,
-      submission: subByRoundId.get(r.id) ?? null,
-      coursesEntered: coursesEnteredFor.has(r.semester_id),
-    }]
-  })
+
+    const sub = subByRoundId.get(r.id) ?? null
+
+    if (sub?.status === 'reviewed' || sub?.status === 'no_grade') {
+      reviewedActiveEntries.push({
+        semesterId: r.semester_id,
+        semesterName: sem.name,
+        roundId: r.id,
+        roundName: r.name,
+        roundNumber: r.round_number ?? null,
+        submission: sub,
+      })
+      continue
+    }
+
+    if (!activeRoundSemIds.has(r.semester_id)) {
+      activeRoundSemIds.add(r.semester_id)
+      activeRounds.push({
+        round: r,
+        semesterName: sem.name,
+        semesterId: r.semester_id,
+        submission: sub,
+        coursesEntered: coursesEnteredFor.has(r.semester_id),
+      })
+    }
+  }
 
   // Active semesters with no rounds yet (legacy flow)
   const legacyActive = (semesters ?? [])
@@ -386,15 +409,15 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     pastRoundsBySemId.get(r.semester_id)!.push(r)
   }
 
-  const past: PastSemesterGroup[] = pastSems.map(s => {
+  const pastFromInactive: PastSemesterGroup[] = pastSems.map(s => {
     const semRounds = pastRoundsBySemId.get(s.id) ?? []
     const entries: PastEntry[] = semRounds.length > 0
       ? semRounds.map(r => {
           const sub = (submissions ?? []).find((sub: any) => sub.round_id === r.id) ?? null
-          return { semesterId: s.id, semesterName: s.name, roundId: r.id, roundName: r.name, submission: sub }
+          return { semesterId: s.id, semesterName: s.name, roundId: r.id, roundName: r.name, roundNumber: r.round_number ?? null, submission: sub }
         })
       : [{
-          semesterId: s.id, semesterName: s.name, roundId: null, roundName: null,
+          semesterId: s.id, semesterName: s.name, roundId: null, roundName: null, roundNumber: null,
           submission: (submissions ?? [])
             .filter((sub: any) => sub.semester_id === s.id)
             .sort((a: any, b: any) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime())[0] ?? null,
@@ -403,6 +426,23 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     const semesterGpa = gpas.length > 0 ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
     return { semesterId: s.id, semesterName: s.name, semesterGpa, rounds: entries }
   })
+
+  // Group reviewed active rounds by semester and prepend to past
+  const reviewedBySemId = new Map<string, PastEntry[]>()
+  for (const entry of reviewedActiveEntries) {
+    if (!reviewedBySemId.has(entry.semesterId)) reviewedBySemId.set(entry.semesterId, [])
+    reviewedBySemId.get(entry.semesterId)!.push(entry)
+  }
+  for (const entries of reviewedBySemId.values()) {
+    entries.sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0))
+  }
+  const reviewedPastGroups: PastSemesterGroup[] = Array.from(reviewedBySemId.entries()).map(([semId, entries]) => {
+    const gpas = entries.map(e => e.submission?.final_gpa).filter((g): g is number => g != null)
+    const semesterGpa = gpas.length > 0 ? gpas.reduce((a, b) => a + b, 0) / gpas.length : null
+    return { semesterId: semId, semesterName: entries[0].semesterName, semesterGpa, rounds: entries }
+  })
+
+  const past = [...reviewedPastGroups, ...pastFromInactive]
 
   // At-risk check: compare latest reviewed GPA against chapter threshold
   let isAtRisk = false

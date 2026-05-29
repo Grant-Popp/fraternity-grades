@@ -29,7 +29,10 @@ export default function Layout({ children, title }: LayoutProps) {
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14 gap-3">
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
             <CardinalLogo size={28} />
-            <span className="text-white font-semibold text-sm hidden xs:inline sm:inline">Grade Portal</span>
+            <div className="hidden sm:block leading-tight">
+              <span className="text-white font-semibold text-sm block">Grade Portal</span>
+              <span className="text-slate-500 text-[10px]">Phi Kappa Tau</span>
+            </div>
           </Link>
           <div className="flex items-center gap-3">
             {/* Nav links — hidden on mobile to keep nav slim */}

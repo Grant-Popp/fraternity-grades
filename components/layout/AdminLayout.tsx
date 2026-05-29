@@ -2,6 +2,7 @@ import { useRouter } from 'next/router'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { useState } from 'react'
+import CardinalLogo from '@/components/CardinalLogo'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -90,12 +91,10 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
       {/* Brand */}
       <div className="px-4 py-4 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
-            <span className="text-slate-900 font-black text-xs tracking-tight select-none">GP</span>
-          </div>
+          <CardinalLogo size={32} />
           <div className="min-w-0">
             <p className="text-white font-semibold text-sm leading-tight truncate">Grade Portal</p>
-            <p className="text-slate-500 text-[11px]">Admin Panel</p>
+            <p className="text-slate-500 text-[11px]">Phi Kappa Tau · Admin</p>
           </div>
         </div>
       </div>

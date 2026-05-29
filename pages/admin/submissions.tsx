@@ -5,12 +5,20 @@ import { useState } from 'react'
 import { gpaColorClass, gradeToGpa, GRADE_MAP } from '@/lib/gpa'
 import type { Submission, Profile, Semester, DropAlert } from '@/lib/database.types'
 
+interface DuplicateMatch {
+  id: string
+  memberName: string
+  submittedAt: string
+  semesterName: string
+}
+
 interface EnrichedSubmission extends Submission {
   member_name: string
   member_class_year: string
   semester_name: string
   round_name: string | null
   round_number: number | null
+  duplicate_matches?: DuplicateMatch[]
 }
 
 interface Props {
@@ -20,14 +28,29 @@ interface Props {
 }
 
 function StatusBadge({ s }: { s: EnrichedSubmission }) {
-  if (s.duplicate_flag && s.status !== 'declined') return <span className="badge-duplicate">⚠ Review</span>
   if (s.status === 'declined') return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>
-  if (s.status === 'reviewed') return <span className="badge-reviewed">Reviewed</span>
+  if (s.status === 'reviewed') return (
+    <div className="flex items-center gap-1.5">
+      {s.duplicate_flag && <span title="Photo was flagged at submission" className="text-amber-400 text-xs">⚠</span>}
+      <span className="badge-reviewed">Reviewed</span>
+    </div>
+  )
+  if (s.duplicate_flag) return <span className="badge-duplicate">⚠ Review</span>
   if (s.status === 'no_grade') return <span className="badge-no-grade">No Grade</span>
   return <span className="badge-pending">Pending</span>
 }
 
-function GpaEditor({ sub, onSave, onDecline }: { sub: EnrichedSubmission; onSave: (id: string, gpa: number | null, notes: string) => void; onDecline: (id: string) => void }) {
+function GpaEditor({
+  sub,
+  onSave,
+  onDecline,
+  isExpanded,
+}: {
+  sub: EnrichedSubmission
+  onSave: (id: string, gpa: number | null, notes: string) => void
+  onDecline: (id: string) => void
+  isExpanded: boolean
+}) {
   const [editing, setEditing] = useState(false)
   const [grade, setGrade] = useState(sub.admin_gpa?.toString() ?? '')
   const [notes, setNotes] = useState(sub.admin_notes ?? '')
@@ -76,67 +99,85 @@ function GpaEditor({ sub, onSave, onDecline }: { sub: EnrichedSubmission; onSave
     setDeclining(false)
   }
 
-  if (!editing) {
+  if (editing) {
     return (
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className={`font-semibold ${sub.final_gpa != null ? gpaColorClass(sub.final_gpa) : 'text-slate-400'}`}>
-          {sub.final_gpa?.toFixed(2) ?? '—'}
-        </span>
-        {sub.status === 'pending' && !sub.no_grade && !declining && (
-          <>
-            <button
-              onClick={approve}
-              disabled={saving}
-              className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors"
-            >
-              {saving ? '…' : '✓ Approve'}
-            </button>
-            <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
-            <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
-          </>
-        )}
-        {sub.status === 'pending' && !sub.no_grade && declining && (
-          <div className="flex items-center gap-1 flex-wrap">
-            <input
-              className="input !py-0.5 !px-2 !text-xs w-36"
-              placeholder="Reason (optional)"
-              value={declineReason}
-              onChange={e => setDeclineReason(e.target.value)}
-              maxLength={500}
-            />
-            <button
-              onClick={confirmDecline}
-              disabled={decliningLoading}
-              className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded transition-colors"
-            >
-              {decliningLoading ? '…' : 'Confirm'}
-            </button>
-            <button onClick={() => { setDeclining(false); setDeclineReason('') }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
-          </div>
-        )}
-        {sub.status === 'reviewed' && (
-          <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
-        )}
-        {sub.status === 'declined' && (
-          <span className="text-xs text-red-400 italic">Declined</span>
-        )}
+      <div className="flex flex-col gap-1 min-w-[160px]">
+        <select className="input !py-1 !text-xs" value={grade} onChange={e => setGrade(e.target.value)}>
+          <option value="">— No grade —</option>
+          {Object.entries(GRADE_MAP).map(([g, pts]) => (
+            <option key={g} value={pts}>{g} ({pts.toFixed(1)})</option>
+          ))}
+        </select>
+        <input className="input !py-1 !text-xs" placeholder="Admin notes…" value={notes} onChange={e => setNotes(e.target.value)} />
+        <div className="flex gap-1">
+          <button onClick={save} disabled={saving} className="btn-primary !py-0.5 !px-2 text-xs flex-1">{saving ? '…' : 'Save'}</button>
+          <button onClick={() => setEditing(false)} className="btn-secondary !py-0.5 !px-2 text-xs">Cancel</button>
+        </div>
       </div>
     )
   }
 
+  // Require photo to be viewed before acting on pending photo submissions
+  const needsPhotoView = !!sub.photo_url && !isExpanded && sub.status === 'pending' && !sub.no_grade
+
   return (
-    <div className="flex flex-col gap-1 min-w-[160px]">
-      <select className="input !py-1 !text-xs" value={grade} onChange={e => setGrade(e.target.value)}>
-        <option value="">— No grade —</option>
-        {Object.entries(GRADE_MAP).map(([g, pts]) => (
-          <option key={g} value={pts}>{g} ({pts.toFixed(1)})</option>
-        ))}
-      </select>
-      <input className="input !py-1 !text-xs" placeholder="Admin notes…" value={notes} onChange={e => setNotes(e.target.value)} />
-      <div className="flex gap-1">
-        <button onClick={save} disabled={saving} className="btn-primary !py-0.5 !px-2 text-xs flex-1">{saving ? '…' : 'Save'}</button>
-        <button onClick={() => setEditing(false)} className="btn-secondary !py-0.5 !px-2 text-xs">Cancel</button>
-      </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className={`font-semibold ${sub.final_gpa != null ? gpaColorClass(sub.final_gpa) : 'text-slate-400'}`}>
+        {sub.final_gpa?.toFixed(2) ?? '—'}
+      </span>
+
+      {needsPhotoView ? (
+        <span className="text-xs text-slate-600 italic">↑ view photo first</span>
+      ) : declining ? (
+        <div className="flex items-center gap-1 flex-wrap">
+          <input
+            className="input !py-0.5 !px-2 !text-xs w-36"
+            placeholder="Reason (optional)"
+            value={declineReason}
+            onChange={e => setDeclineReason(e.target.value)}
+            maxLength={500}
+          />
+          <button
+            onClick={confirmDecline}
+            disabled={decliningLoading}
+            className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded transition-colors"
+          >
+            {decliningLoading ? '…' : 'Confirm'}
+          </button>
+          <button onClick={() => { setDeclining(false); setDeclineReason('') }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+        </div>
+      ) : (
+        <>
+          {sub.status === 'pending' && !sub.no_grade && (
+            <>
+              <button
+                onClick={approve}
+                disabled={saving}
+                className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors"
+              >
+                {saving ? '…' : '✓ Approve'}
+              </button>
+              <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+              <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
+            </>
+          )}
+          {sub.status === 'pending' && sub.no_grade && (
+            <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Review</button>
+          )}
+          {sub.status === 'reviewed' && (
+            <>
+              <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+              <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
+            </>
+          )}
+          {sub.status === 'declined' && (
+            <>
+              <span className="text-xs text-red-400 italic">Declined</span>
+              <button onClick={() => setEditing(true)} className="text-xs text-slate-500 hover:text-amber-400">Edit</button>
+            </>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -292,7 +333,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
             <tbody>
               {filtered.map(s => (
                 <>
-                  <tr key={s.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                  <tr key={s.id} className={`border-b border-slate-700/50 hover:bg-slate-700/20 ${expandedId === s.id ? 'bg-slate-800/40' : ''}`}>
                     <td className="px-4 py-3 text-white font-medium">{s.member_name}</td>
                     <td className="px-4 py-3 text-slate-300">{s.member_class_year}</td>
                     <td className="px-4 py-3 text-slate-300">{s.semester_name}</td>
@@ -308,36 +349,46 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <GpaEditor sub={s} onSave={handleSave} onDecline={handleDecline} />
+                      <GpaEditor sub={s} onSave={handleSave} onDecline={handleDecline} isExpanded={expandedId === s.id} />
                     </td>
                     <td className="px-4 py-3"><StatusBadge s={s} /></td>
                     <td className="px-4 py-3">
-                      {s.photo_url && (
+                      {s.photo_url ? (
                         <button
                           onClick={() => handleViewPhoto(s.id)}
-                          className="text-xs text-amber-400 hover:text-amber-300"
+                          className="text-xs text-amber-400 hover:text-amber-300 whitespace-nowrap"
                         >
-                          {loadingPhoto === s.id ? '…' : expandedId === s.id ? 'Hide' : 'View Photo'}
+                          {loadingPhoto === s.id ? '…' : expandedId === s.id ? 'Hide ↑' : 'View Photo ↓'}
                         </button>
+                      ) : (
+                        <span className="text-xs text-slate-600">No photo</span>
                       )}
                     </td>
                   </tr>
                   {expandedId === s.id && s.photo_url && (
-                    <tr key={`${s.id}-expand`} className="bg-slate-900/40">
-                      <td colSpan={9} className="px-4 py-4">
-                        <div className="flex gap-6">
-                          {signedUrls[s.id] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={signedUrls[s.id]} alt="Grade screenshot" className="max-h-80 rounded border border-slate-600 object-contain" />
-                          ) : (
-                            <div className="flex items-center justify-center w-40 h-32 bg-slate-800 rounded border border-slate-600 text-slate-400 text-sm">
-                              {loadingPhoto === s.id ? 'Loading…' : 'Could not load photo'}
-                            </div>
-                          )}
-                          <div className="flex-1">
+                    <tr key={`${s.id}-expand`} className="bg-slate-950/60 border-b border-slate-700">
+                      <td colSpan={9} className="px-4 py-5">
+                        <div className="flex gap-6 flex-wrap">
+                          <div className="shrink-0">
+                            {signedUrls[s.id] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={signedUrls[s.id]} alt="Grade screenshot" className="max-h-96 max-w-sm rounded border border-slate-600 object-contain cursor-pointer"
+                                onClick={() => window.open(signedUrls[s.id], '_blank')} title="Click to open full size" />
+                            ) : (
+                              <div className="flex items-center justify-center w-48 h-36 bg-slate-800 rounded border border-slate-600 text-slate-400 text-sm">
+                                {loadingPhoto === s.id ? 'Loading…' : 'Could not load photo'}
+                              </div>
+                            )}
+                            {signedUrls[s.id] && (
+                              <a href={signedUrls[s.id]} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-amber-400 mt-1 block">
+                                Open full size ↗
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-3">
                             {s.course_grades && Object.keys(s.course_grades).length > 0 && (
-                              <div className="mb-3">
-                                <p className="text-slate-400 text-xs mb-2">Course grades (OCR detected):</p>
+                              <div>
+                                <p className="text-slate-400 text-xs mb-2 font-medium">OCR-detected course grades:</p>
                                 <div className="flex flex-wrap gap-2">
                                   {Object.entries(s.course_grades).map(([course, grade]) => {
                                     const gpa = gradeToGpa(grade)
@@ -352,14 +403,34 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                                 </div>
                               </div>
                             )}
-                            <p className="text-slate-400 text-xs mb-2">Raw OCR text:</p>
-                            <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-40">{s.ocr_raw_text ?? '—'}</pre>
+                            <div>
+                              <p className="text-slate-400 text-xs mb-1 font-medium">Raw OCR text:</p>
+                              <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-32 whitespace-pre-wrap">{s.ocr_raw_text || '(none)'}</pre>
+                            </div>
                             {s.duplicate_flag && (
-                              <p className="text-red-400 text-sm mt-3 bg-red-900/20 px-3 py-2 rounded-lg">
-                                ⚠️ <strong>Flagged for review</strong> — possible duplicate photo, similar image from another member, or member name not found in screenshot. Verify the photo is correct.
-                              </p>
+                              <div className="bg-amber-950/40 border border-amber-700/40 rounded-lg px-3 py-3">
+                                <p className="text-amber-400 text-sm font-semibold mb-2">⚠ Flagged for manual review</p>
+                                {s.duplicate_matches && s.duplicate_matches.length > 0 ? (
+                                  <div className="mb-2">
+                                    <p className="text-amber-300 text-xs font-medium mb-1">Near-identical photo also found in:</p>
+                                    <ul className="space-y-0.5">
+                                      {s.duplicate_matches.map(m => (
+                                        <li key={m.id} className="text-xs text-amber-200">
+                                          • <span className="font-medium">{m.memberName}</span> — {m.semesterName} (submitted {new Date(m.submittedAt).toLocaleDateString()})
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+                                <p className="text-slate-400 text-xs">Other possible triggers: photo editing software detected in EXIF, member's name not found in screenshot, or page does not appear to be from a grade portal.</p>
+                              </div>
                             )}
-                            {s.admin_notes && <p className="text-amber-300 text-sm mt-2">Note: {s.admin_notes}</p>}
+                            {s.admin_notes && (
+                              <p className="text-amber-300 text-sm bg-amber-900/20 px-3 py-2 rounded">Note: {s.admin_notes}</p>
+                            )}
+                            {s.reviewed_at && (
+                              <p className="text-slate-600 text-xs">Reviewed {new Date(s.reviewed_at).toLocaleString()}</p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -404,6 +475,24 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     semesters: undefined,
     semester_rounds: undefined,
   }))
+
+  // Compute phash duplicate matches for flagged submissions
+  try {
+    const { hammingDistance } = await import('@/lib/phash')
+    const subsWithHash = submissions.filter(s => s.photo_phash)
+    for (const sub of submissions) {
+      if (!sub.duplicate_flag || !sub.photo_phash) continue
+      sub.duplicate_matches = subsWithHash
+        .filter(other => other.id !== sub.id && other.photo_phash)
+        .filter(other => hammingDistance(sub.photo_phash!, other.photo_phash!) <= 10)
+        .map(other => ({
+          id: other.id,
+          memberName: other.member_name,
+          submittedAt: other.submitted_at,
+          semesterName: other.semester_name,
+        }))
+    }
+  } catch {}
 
   return { props: { submissions, semesters: semestersRes.data ?? [], dropAlerts: dropAlertsRes.data ?? [] } }
 }

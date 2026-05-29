@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-export type EmailType = 'reminder' | 'deadline_warning' | 'confirmation' | 'declined' | 'at_risk_summary'
+export type EmailType = 'reminder' | 'deadline_warning' | 'confirmation' | 'approved' | 'declined' | 'at_risk_summary'
 
 interface SendEmailOptions {
   to: string
@@ -22,12 +22,14 @@ interface SendEmailOptions {
   declineReason?: string
   atRiskMembers?: { name: string; gpa: number }[]
   threshold?: number
+  finalGpa?: number
 }
 
 const SUBJECTS: Record<EmailType, (s: string) => string> = {
   reminder:          (s) => `Grade Submission Open — ${s}`,
   deadline_warning:  (s) => `⚠️ Grade Submission Due Soon — ${s}`,
   confirmation:      (s) => `✅ Grade Submission Received — ${s}`,
+  approved:          (s) => `✅ Grade Submission Approved — ${s}`,
   declined:          (s) => `❌ Grade Submission Declined — ${s}`,
   at_risk_summary:   (s) => `⚠️ At-Risk Members — ${s}`,
 }
@@ -57,6 +59,12 @@ function buildBody(opts: SendEmailOptions): string {
       <p>Hi ${memberName},</p>
       <p>Your grade submission for <strong>${semesterName}</strong> has been received successfully.</p>
       <p>The VP of Academics & Scholarship will review your submission and no further action is needed from you.</p>
+    `,
+    approved: `
+      <p>Hi ${memberName},</p>
+      <p>Your grade submission for <strong>${semesterName}</strong> has been reviewed and <strong style="color:#4ade80;">approved</strong>.</p>
+      ${opts.finalGpa != null ? `<p>Your recorded GPA for this semester is <strong style="color:#4ade80;font-size:18px;">${opts.finalGpa.toFixed(2)}</strong>.</p>` : ''}
+      <p>No further action is needed. You can view your submission history on the grade portal.</p>
     `,
     declined: `
       <p>Hi ${memberName},</p>

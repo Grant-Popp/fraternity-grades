@@ -20,10 +20,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (status && !VALID_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' })
   if (adminNotes && adminNotes.length > 1000) return res.status(400).json({ error: 'Notes must be 1000 characters or less' })
 
-  const { data: sub } = await supabaseAdmin.from('submissions').select('ocr_gpa').eq('id', submissionId).maybeSingle()
+  const { data: sub } = await supabaseAdmin
+    .from('submissions')
+    .select('ocr_gpa, member_id, semester_id, profiles(full_name, email), semesters(name)')
+    .eq('id', submissionId)
+    .maybeSingle()
   if (!sub) return res.status(404).json({ error: 'Submission not found' })
 
-  const finalGpa = adminGpa ?? sub.ocr_gpa
+  const finalGpa = adminGpa ?? (sub as any).ocr_gpa
 
   const { error } = await supabaseAdmin.from('submissions').update({
     admin_gpa: adminGpa ?? null,
@@ -34,5 +38,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }).eq('id', submissionId)
 
   if (error) return res.status(500).json({ error: error.message })
+
+  // Send approval email when marking as reviewed
+  if ((status ?? 'reviewed') === 'reviewed') {
+    try {
+      const memberProfile = (sub as any).profiles
+      const semester = (sub as any).semesters
+      if (memberProfile && semester) {
+        const { sendEmail } = await import('@/lib/email')
+        await sendEmail({
+          to: memberProfile.email,
+          memberName: memberProfile.full_name,
+          semesterName: semester.name,
+          type: 'approved',
+          finalGpa: finalGpa ?? undefined,
+        })
+      }
+    } catch {}
+  }
+
   return res.status(200).json({ ok: true, finalGpa })
 }

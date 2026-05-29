@@ -189,11 +189,18 @@ export default function MemberDetailPage({ member: initialMember, submissions, s
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {s.duplicate_flag && <span className="badge-duplicate mr-1">⚠ Dup</span>}
-                      {s.status === 'reviewed' && <span className="badge-reviewed">Reviewed</span>}
-                      {s.status === 'no_grade' && <span className="badge-no-grade">No Grade</span>}
-                      {s.status === 'pending' && <span className="badge-pending">Pending</span>}
-                      {s.status === 'declined' && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {s.status === 'reviewed' && <span className="badge-reviewed">Reviewed</span>}
+                        {s.status === 'no_grade' && <span className="badge-no-grade">No Grade</span>}
+                        {s.status === 'pending' && <span className="badge-pending">Pending</span>}
+                        {s.status === 'declined' && <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">Declined</span>}
+                        {s.duplicate_flag && (
+                          <span
+                            className="text-xs text-amber-400 font-medium cursor-help"
+                            title="This submission was flagged at upload — possible duplicate photo, name mismatch, or unrecognized screenshot"
+                          >⚠ Flagged</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {naCount > 0 ? (

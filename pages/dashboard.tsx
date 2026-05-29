@@ -64,8 +64,13 @@ function WithdrawButton({ submissionId, onWithdrawn }: { submissionId: string; o
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submissionId }),
     })
-    if (res.ok) onWithdrawn()
-    else setLoading(false)
+    if (res.ok) {
+      onWithdrawn()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setLoading(false)
+      alert(data.error ?? 'Could not withdraw submission. Please refresh the page and try again.')
+    }
   }
   return (
     <button onClick={withdraw} disabled={loading} className="text-xs text-slate-500 hover:text-red-400 transition-colors">

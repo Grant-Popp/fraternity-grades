@@ -9,6 +9,7 @@ import { GRADE_MAP } from '@/lib/gpa'
 interface Props {
   semester: Semester
   alreadySubmitted: boolean
+  isFinalized: boolean
   activeRound: SemesterRound | null
   memberCourses: MemberCourse[]
   declinedReason: string | null
@@ -33,9 +34,10 @@ interface OcrState {
   directGpa: number | null
 }
 
-export default function SubmitPage({ semester, alreadySubmitted, activeRound, memberCourses: initialCourses, declinedReason }: Props) {
+export default function SubmitPage({ semester, alreadySubmitted, isFinalized, activeRound, memberCourses: initialCourses, declinedReason }: Props) {
   const router = useRouter()
   const submitLockRef = useRef(false)
+  const changePhotoInputRef = useRef<HTMLInputElement>(null)
 
   const getInitialStep = (): Step => {
     if (!activeRound) return 'choose'
@@ -241,9 +243,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     setStep('choose')
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
+  const processFile = async (f: File) => {
     if (f.size > 5 * 1024 * 1024) {
       setError('File is too large. Please upload an image under 5MB.')
       return
@@ -254,6 +254,8 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
     setStep('ocr')
     setOcrLoading(true)
     setOcrFailed(false)
+    setOcrState(null)
+    setSelectedGrade('')
     try {
       const { runOcr } = await import('@/lib/ocr')
       const result = await runOcr(f)
@@ -268,6 +270,12 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
       setOcrLoading(false)
       setStep('confirm')
     }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    await processFile(f)
   }
 
   const handleSubmitPhoto = async () => {
@@ -332,6 +340,22 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   const pageTitle = activeRound ? `${semester.name} — ${activeRound.name}` : semester.name
 
   // ── Guard screens ─────────────────────────────────────────
+  if (isFinalized) {
+    return (
+      <Layout title={pageTitle}>
+        <div className="card text-center py-12 max-w-lg mx-auto">
+          <p className="text-4xl mb-3">🔒</p>
+          <p className="text-white font-semibold text-lg">Grades Finalized</p>
+          <p className="text-slate-400 text-sm mt-1 mb-1">
+            Your submission for <strong className="text-white">{pageTitle}</strong> has been reviewed and approved.
+          </p>
+          <p className="text-slate-500 text-xs">No further action is needed. Contact the VP of Academics &amp; Scholarship if you believe there is an error.</p>
+          <button onClick={() => router.push('/dashboard')} className="btn-primary mt-6">Back to Dashboard</button>
+        </div>
+      </Layout>
+    )
+  }
+
   if (alreadySubmitted) {
     return (
       <Layout title={pageTitle}>
@@ -670,6 +694,20 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
           </div>
         )}
 
+        {/* Hidden input for in-place photo swap */}
+        <input
+          ref={changePhotoInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            if (!f) return
+            e.target.value = ''
+            await processFile(f)
+          }}
+        />
+
         {/* Step: Confirm OCR result */}
         {step === 'confirm' && ocrState && (
           <div className="space-y-4">
@@ -683,7 +721,18 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                   className="absolute top-4 right-4 bg-slate-900/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full w-8 h-8 flex items-center justify-center text-lg leading-none transition-colors"
                   aria-label="Remove photo"
                 >×</button>
-                {file && <p className="text-slate-500 text-xs mt-1.5 truncate">{file.name}</p>}
+                {file && (
+                  <div className="flex items-center justify-between mt-1.5">
+                    <p className="text-slate-500 text-xs truncate">{file.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => changePhotoInputRef.current?.click()}
+                      className="text-xs text-amber-400 hover:text-amber-300 shrink-0 ml-2 transition-colors"
+                    >
+                      ↺ Try different photo
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             <div className="card">
@@ -859,14 +908,17 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .maybeSingle()
 
   // Check for existing submission (per-round if round exists, per-semester otherwise)
-  // Declined submissions don't block resubmission — only active/reviewed ones do
+  // Declined → allow resubmission. Reviewed → show finalized screen. Pending/no_grade → already submitted.
   let alreadySubmitted = false
+  let isFinalized = false
   let declinedReason: string | null = null
   if (activeRound) {
     const { data: existing } = await supabase
       .from('submissions').select('id,status,decline_reason').eq('member_id', session!.user.id).eq('round_id', activeRound.id).maybeSingle()
     if (existing?.status === 'declined') {
       declinedReason = existing.decline_reason ?? ''
+    } else if (existing?.status === 'reviewed') {
+      isFinalized = true
     } else {
       alreadySubmitted = !!existing
     }
@@ -875,6 +927,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
       .from('submissions').select('id,status,decline_reason').eq('member_id', session!.user.id).eq('semester_id', semesterId).maybeSingle()
     if (existing?.status === 'declined') {
       declinedReason = existing.decline_reason ?? ''
+    } else if (existing?.status === 'reviewed') {
+      isFinalized = true
     } else {
       alreadySubmitted = !!existing
     }
@@ -888,5 +942,5 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .eq('semester_id', semesterId)
     .order('created_at', { ascending: true })
 
-  return { props: { semester, alreadySubmitted, activeRound: activeRound ?? null, memberCourses: memberCourses ?? [], declinedReason } }
+  return { props: { semester, alreadySubmitted, isFinalized, activeRound: activeRound ?? null, memberCourses: memberCourses ?? [], declinedReason } }
 }

@@ -31,7 +31,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   let query = supabaseAdmin.from('profiles').select('id,full_name,email').eq('role', 'member')
   if (classYears && classYears.length > 0) query = query.in('class_year', classYears)
   const { data: members } = await query
-  const { data: submitted } = await supabaseAdmin.from('submissions').select('member_id').eq('semester_id', semesterId)
+
+  // Find the active round for this semester (if any) so we check per-round submission status
+  const { data: activeRound } = await supabaseAdmin
+    .from('semester_rounds')
+    .select('id')
+    .eq('semester_id', semesterId)
+    .eq('is_active', true)
+    .order('round_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // Only count non-declined submissions as "submitted" (declined members need to resubmit)
+  // For round-based semesters, only count submissions for the active round
+  let submittedQuery = supabaseAdmin
+    .from('submissions')
+    .select('member_id')
+    .eq('semester_id', semesterId)
+    .neq('status', 'declined')
+  if (activeRound) submittedQuery = (submittedQuery as any).eq('round_id', activeRound.id)
+  const { data: submitted } = await submittedQuery
   const submittedIds = new Set((submitted ?? []).map((s: any) => s.member_id))
   const targets = (members ?? []).filter(m => !submittedIds.has(m.id))
 

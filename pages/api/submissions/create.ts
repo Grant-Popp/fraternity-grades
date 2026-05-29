@@ -173,8 +173,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const photoDate = new Date(exifDate)
       if (!isNaN(photoDate.getTime())) {
         const daysOld = (Date.now() - photoDate.getTime()) / (1000 * 60 * 60 * 24)
-        if (daysOld > 45) {
-          return res.status(400).json({ error: `This photo was taken ${Math.round(daysOld)} days ago. Please take a new screenshot of your current grades.` })
+        if (daysOld > 14) {
+          return res.status(400).json({ error: `This photo was taken ${Math.round(daysOld)} days ago. Please take a new screenshot of your current grades (must be within the last 14 days).` })
         }
       }
     }

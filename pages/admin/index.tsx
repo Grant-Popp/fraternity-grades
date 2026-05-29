@@ -266,7 +266,15 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     }
   }).sort((a, b) => a.major.localeCompare(b.major))
 
-  const activeSemSubmitted = activeSem ? (submissions ?? []).filter(s => s.semester_id === activeSem.id).length : 0
+  // Count unique members with a non-declined submission — raw row count inflates when a member
+  // resubmits after a decline (which creates 2 rows for 1 member).
+  const activeSemSubmitted = activeSem
+    ? new Set(
+        (submissions ?? [])
+          .filter(s => s.semester_id === activeSem.id && s.status !== 'declined')
+          .map(s => s.member_id)
+      ).size
+    : 0
   const activeSemesterData = activeSem ? {
     id: activeSem.id, name: activeSem.name, deadline: activeSem.deadline,
     submitted: activeSemSubmitted,

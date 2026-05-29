@@ -127,16 +127,16 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
       {/* Stats row */}
       <div className="mb-6 grid grid-cols-3 gap-3">
         <div className="card !p-4">
-          <p className="text-slate-400 text-xs sm:text-sm">Class Year</p>
-          <p className="text-white font-semibold text-sm sm:text-base truncate">{profile.class_year}</p>
+          <p className="text-slate-400 text-xs">Class Year</p>
+          <p className="text-white font-semibold text-xs sm:text-sm leading-tight mt-0.5">{profile.class_year}</p>
         </div>
         <div className="card !p-4">
-          <p className="text-slate-400 text-xs sm:text-sm">Submitted</p>
-          <p className="text-white font-semibold text-sm sm:text-base">{submittedCount}</p>
+          <p className="text-slate-400 text-xs">Submitted</p>
+          <p className="text-white font-semibold text-sm sm:text-base mt-0.5">{submittedCount}</p>
         </div>
         <div className="card !p-4">
-          <p className="text-slate-400 text-xs sm:text-sm">Latest GPA</p>
-          <p className="font-semibold text-sm sm:text-base flex items-center">
+          <p className="text-slate-400 text-xs">Latest GPA</p>
+          <p className="font-semibold text-sm sm:text-base flex items-center mt-0.5">
             {latestGpa != null
               ? <><span className={gpaColorClass(latestGpa)}>{latestGpa.toFixed(2)}</span><TrendArrow current={latestGpa} previous={previousGpa} /></>
               : <span className="text-slate-400">—</span>}
@@ -151,77 +151,102 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
           <div className="space-y-3">
 
             {/* Round-based entries */}
-            {activeRounds.map(entry => (
-              <div key={entry.round.id} className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white">{entry.semesterName}</p>
-                  <p className="text-amber-400 text-xs">{entry.round.name}</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                    <p className="text-slate-400 text-sm">
-                      Due: {new Date(entry.round.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                    {(!entry.submission || entry.submission.status === 'declined') && <DeadlineCountdown deadline={entry.round.deadline} />}
+            {activeRounds.map(entry => {
+              const submitted = !!entry.submission && entry.submission.status !== 'declined'
+              const declined = entry.submission?.status === 'declined'
+              const pastDeadline = new Date(entry.round.deadline) <= new Date()
+              const accentColor = submitted ? 'border-l-green-500' : declined ? 'border-l-red-500' : 'border-l-amber-500'
+              return (
+                <div key={entry.round.id} className={`card border-l-4 ${accentColor} !pl-4`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-white">{entry.semesterName}</p>
+                        <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">{entry.round.name}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                        <p className="text-slate-400 text-xs">
+                          Due {new Date(entry.round.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        {!submitted && <DeadlineCountdown deadline={entry.round.deadline} />}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <StatusBadge submission={entry.submission} />
+                      {(entry.submission?.status === 'pending' || entry.submission?.status === 'no_grade') && !pastDeadline && (
+                        <WithdrawButton
+                          submissionId={entry.submission.id}
+                          onWithdrawn={() => setActiveRounds(prev => prev.map(r => r.round.id === entry.round.id ? { ...r, submission: null } : r))}
+                        />
+                      )}
+                      {!submitted && !pastDeadline && (
+                        <Link
+                          href={`/submit/${entry.semesterId}`}
+                          className={`text-sm px-4 py-1.5 whitespace-nowrap ${declined || entry.coursesEntered ? 'btn-primary' : 'btn-secondary'}`}
+                        >
+                          {declined ? 'Resubmit →' : entry.coursesEntered ? 'Submit Grades →' : 'Set up courses →'}
+                        </Link>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusBadge submission={entry.submission} />
-                  {(entry.submission?.status === 'pending' || entry.submission?.status === 'no_grade') && new Date(entry.round.deadline) > new Date() && (
-                    <WithdrawButton
-                      submissionId={entry.submission.id}
-                      onWithdrawn={() => setActiveRounds(prev => prev.map(r => r.round.id === entry.round.id ? { ...r, submission: null } : r))}
-                    />
-                  )}
-                  {(!entry.submission || entry.submission.status === 'declined') && new Date(entry.round.deadline) > new Date() && (
-                    <Link
-                      href={`/submit/${entry.semesterId}`}
-                      className={`text-sm px-4 py-1.5 whitespace-nowrap ${entry.submission?.status === 'declined' ? 'btn-primary' : entry.coursesEntered ? 'btn-primary' : 'btn-secondary'}`}
-                    >
-                      {entry.submission?.status === 'declined' ? 'Resubmit →' : entry.coursesEntered ? 'Submit Grades →' : 'Set up courses →'}
-                    </Link>
+                  {entry.submission?.admin_notes && (
+                    <p className="mt-2 text-xs text-amber-300 bg-amber-900/20 px-3 py-1.5 rounded-lg">
+                      Note from VP: {entry.submission.admin_notes}
+                    </p>
                   )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {/* Legacy active semesters (no rounds) */}
-            {legacyActive.map(s => (
-              <div key={s.id} className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white">{s.name}</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                    <p className="text-slate-400 text-sm">
-                      Due: {new Date(s.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                    {(!s.submission || s.submission.status === 'declined') && <DeadlineCountdown deadline={s.deadline} />}
+            {legacyActive.map(s => {
+              const submitted = !!s.submission && s.submission.status !== 'declined'
+              const declined = s.submission?.status === 'declined'
+              const pastDeadline = new Date(s.deadline) <= new Date()
+              const accentColor = submitted ? 'border-l-green-500' : declined ? 'border-l-red-500' : 'border-l-amber-500'
+              return (
+                <div key={s.id} className={`card border-l-4 ${accentColor} !pl-4`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white">{s.name}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                        <p className="text-slate-400 text-xs">
+                          Due {new Date(s.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        {!submitted && <DeadlineCountdown deadline={s.deadline} />}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <StatusBadge submission={s.submission} />
+                      {(s.submission?.status === 'pending' || s.submission?.status === 'no_grade') && !pastDeadline && (
+                        <WithdrawButton
+                          submissionId={s.submission.id}
+                          onWithdrawn={() => setLegacyActive(prev => prev.map(l => l.id === s.id ? { ...l, submission: null } : l))}
+                        />
+                      )}
+                      {!submitted && !pastDeadline && (
+                        <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5 whitespace-nowrap">
+                          {declined ? 'Resubmit →' : 'Submit Grades →'}
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusBadge submission={s.submission} />
-                  {(s.submission?.status === 'pending' || s.submission?.status === 'no_grade') && new Date(s.deadline) > new Date() && (
-                    <WithdrawButton
-                      submissionId={s.submission.id}
-                      onWithdrawn={() => setLegacyActive(prev => prev.map(l => l.id === s.id ? { ...l, submission: null } : l))}
-                    />
-                  )}
-                  {(!s.submission || s.submission.status === 'declined') && new Date(s.deadline) > new Date() && (
-                    <Link href={`/submit/${s.id}`} className="btn-primary text-sm px-4 py-1.5 whitespace-nowrap">
-                      {s.submission?.status === 'declined' ? 'Resubmit →' : 'Submit Grades →'}
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
 
           </div>
         </section>
       )}
 
       {!hasOpen && (
-        <div className="card text-center py-12 mb-8">
-          <p className="text-4xl mb-3">📭</p>
-          <p className="text-white font-semibold text-lg">No open submissions</p>
-          <p className="text-slate-400 text-sm mt-1">The VP of Academics & Scholarship hasn&apos;t opened a new round yet.</p>
-          <p className="text-slate-500 text-xs mt-3">Questions? Email the VP of Academics & Scholarship: <a href="mailto:pktbb.academics@gmail.com" className="text-amber-400 hover:text-amber-300">pktbb.academics@gmail.com</a></p>
+        <div className="card text-center py-10 mb-8">
+          <p className="text-3xl mb-3">📭</p>
+          <p className="text-white font-semibold">No open submissions</p>
+          <p className="text-slate-400 text-sm mt-1">The VP of Academics hasn&apos;t opened a new round yet.</p>
+          <p className="text-slate-500 text-xs mt-3">
+            Questions? <a href="mailto:pktbb.academics@gmail.com" className="text-amber-400 hover:text-amber-300">pktbb.academics@gmail.com</a>
+          </p>
         </div>
       )}
 
@@ -229,67 +254,66 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
       {past.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold text-white mb-3">Past Semesters</h2>
-          <div className="card overflow-hidden !p-0">
-            <div className="overflow-x-auto relative [mask-image:linear-gradient(to_right,black_85%,transparent_100%)] sm:[mask-image:none]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-900/50">
-                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Semester</th>
-                    <th className="text-center px-4 py-3 text-slate-400 font-medium">GPA</th>
-                    <th className="text-center px-4 py-3 text-slate-400 font-medium">Status</th>
-                    <th className="text-left px-4 py-3 text-slate-400 font-medium">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {past.map((group, gi) => {
-                    const multiRound = group.rounds.length > 1
-                    return (
-                      <>
-                        {/* Semester header row — only when multiple rounds exist */}
-                        {multiRound && (
-                          <tr key={`hdr-${group.semesterId}`} className={`bg-slate-900/40 ${gi > 0 ? 'border-t border-slate-600' : 'border-b border-slate-700/50'}`}>
-                            <td className="px-4 py-2.5">
-                              <span className="text-white font-semibold">{group.semesterName}</span>
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              {group.semesterGpa != null
-                                ? <span className={`font-semibold ${gpaColorClass(group.semesterGpa)}`}>{group.semesterGpa.toFixed(2)}</span>
-                                : <span className="text-slate-500">—</span>}
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              <span className="text-slate-500 text-xs">avg</span>
-                            </td>
-                            <td className="px-4 py-2.5" />
-                          </tr>
+          <div className="space-y-3">
+            {past.map((group) => {
+              const multiRound = group.rounds.length > 1
+              const anyDeclined = group.rounds.some(r => r.submission?.status === 'declined')
+              const allDone = group.rounds.every(r => r.submission?.status === 'reviewed' || r.submission?.status === 'no_grade')
+              const accentColor = anyDeclined ? 'border-l-red-500' : allDone ? 'border-l-green-500' : 'border-l-slate-600'
+              return (
+                <div key={group.semesterId} className={`card border-l-4 ${accentColor} !pl-4`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white">{group.semesterName}</p>
+                      {multiRound && group.semesterGpa != null && (
+                        <p className="text-slate-400 text-xs mt-0.5">
+                          Avg GPA: <span className={`font-semibold ${gpaColorClass(group.semesterGpa)}`}>{group.semesterGpa.toFixed(2)}</span>
+                        </p>
+                      )}
+                    </div>
+                    {!multiRound && (
+                      <div className="flex items-center gap-3 shrink-0">
+                        {group.rounds[0]?.submission?.final_gpa != null && (
+                          <span className={`font-semibold text-sm ${gpaColorClass(group.rounds[0].submission.final_gpa)}`}>
+                            {group.rounds[0].submission.final_gpa.toFixed(2)}
+                          </span>
                         )}
-                        {/* Per-round rows */}
-                        {group.rounds.map((entry, ri) => (
-                          <tr key={`${entry.semesterId}-${entry.roundId ?? 'none'}`}
-                            className={`border-b border-slate-700/50 last:border-0 ${!multiRound && gi > 0 ? 'border-t border-slate-600' : ''}`}>
-                            <td className="px-4 py-3">
-                              {multiRound ? (
-                                <span className="text-slate-400 text-xs pl-3">↳ {entry.roundName}</span>
-                              ) : (
-                                <span className="text-white">{entry.semesterName}</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {entry.submission?.final_gpa != null
-                                ? <span className={`font-semibold ${gpaColorClass(entry.submission.final_gpa)}`}>{entry.submission.final_gpa.toFixed(2)}</span>
-                                : <span className="text-slate-500">—</span>}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <StatusBadge submission={entry.submission} />
-                            </td>
-                            <td className="px-4 py-3 text-amber-300 text-xs max-w-xs">{entry.submission?.admin_notes ?? <span className="text-slate-600">—</span>}</td>
-                          </tr>
-                        ))}
-                      </>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        <StatusBadge submission={group.rounds[0]?.submission ?? null} />
+                      </div>
+                    )}
+                  </div>
+                  {!multiRound && group.rounds[0]?.submission?.admin_notes && (
+                    <p className="mt-2 text-xs text-amber-300 bg-amber-900/20 px-3 py-1.5 rounded-lg">
+                      Note from VP: {group.rounds[0].submission.admin_notes}
+                    </p>
+                  )}
+                  {multiRound && (
+                    <div className="mt-3 space-y-2">
+                      {group.rounds.map((entry) => (
+                        <div key={entry.roundId ?? entry.semesterId} className="flex items-center gap-3 pl-3 border-l border-slate-700">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-slate-300 text-sm">{entry.roundName}</p>
+                            {entry.submission?.admin_notes && (
+                              <p className="text-xs text-amber-300 mt-0.5">{entry.submission.admin_notes}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {entry.submission?.final_gpa != null ? (
+                              <span className={`font-semibold text-sm ${gpaColorClass(entry.submission.final_gpa)}`}>
+                                {entry.submission.final_gpa.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 text-sm">—</span>
+                            )}
+                            <StatusBadge submission={entry.submission} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </section>
       )}

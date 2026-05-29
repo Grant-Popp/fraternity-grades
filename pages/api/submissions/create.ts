@@ -5,6 +5,7 @@ import { gradeToGpa } from '@/lib/gpa'
 import { computePhash, isDuplicate } from '@/lib/phash'
 import formidable from 'formidable'
 import fs from 'fs'
+import sharp from 'sharp'
 
 export const config = { api: { bodyParser: false } }
 
@@ -200,11 +201,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const softwareTag = (tags as any)['Software']
     if (softwareTag?.description) {
       const sw = (softwareTag.description as string).toLowerCase()
-      const editingTools = ['photoshop', 'gimp', 'lightroom', 'affinity', 'paint.net', 'pixelmator', 'snapseed', 'vsco']
+      const editingTools = ['photoshop', 'gimp', 'lightroom', 'affinity', 'paint.net', 'pixelmator', 'snapseed', 'vsco', 'canva', 'picsart', 'facetune', 'corel', 'photoscape', 'luminar', 'darktable', 'rawtherapee']
       if (editingTools.some(t => sw.includes(t))) duplicate_flag = true
     }
   } catch {
     // EXIF parse failure — no EXIF data (normal for screenshots)
+  }
+
+  // ── Anti-cheat: image resolution ────────────────────────────
+  // Real grade portal screenshots are at least 400×400px. Tiny images suggest
+  // a cropped, synthetic, or placeholder screenshot.
+  try {
+    const meta = await sharp(fileBuffer).metadata()
+    if ((meta.width ?? 999) < 400 || (meta.height ?? 999) < 400) duplicate_flag = true
+  } catch {}
+
+  // ── Anti-cheat: file size sanity ─────────────────────────────
+  // A <5 KB file with substantial OCR text suggests a synthetic/generated image —
+  // real screenshots with text content are always larger.
+  if (fileBuffer.length < 5000 && ocrRawText && ocrRawText.length > 100) {
+    duplicate_flag = true
   }
 
   const ext = imageFile.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -219,18 +235,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
   // ── Anti-cheat 2: Perceptual hash ────────────────────────────
-  // Catches identical or near-identical images reused across submissions.
+  // Catches identical or near-identical images reused across ANY past submission —
+  // same semester, cross-semester own reuse, and cross-member sharing.
+  // Threshold tightened to 8 (from default 10) to reduce false negatives.
   try {
     photo_phash = await computePhash(fileBuffer)
-    const hashQuery = supabaseAdmin.from('submissions').select('photo_phash').not('photo_phash', 'is', null)
-    const scoped = roundId ? hashQuery.eq('round_id', roundId) : hashQuery.eq('semester_id', semesterId)
-    const { data: scopedSubs } = await scoped
-    const { data: ownSubs } = await supabaseAdmin.from('submissions').select('photo_phash').eq('member_id', user.id).not('photo_phash', 'is', null)
-    const allHashes = [
-      ...(scopedSubs ?? []).map((s: any) => s.photo_phash),
-      ...(ownSubs ?? []).map((s: any) => s.photo_phash),
-    ].filter(Boolean) as string[]
-    if (isDuplicate(photo_phash, allHashes)) duplicate_flag = true
+    const { data: allPastSubs } = await supabaseAdmin
+      .from('submissions').select('photo_phash').not('photo_phash', 'is', null).limit(2000)
+    const allHashes = (allPastSubs ?? []).map((s: any) => s.photo_phash).filter(Boolean) as string[]
+    if (isDuplicate(photo_phash, allHashes, 8)) duplicate_flag = true
   } catch {}
 
   // ── Anti-cheat 3: Identity checks ───────────────────────────
@@ -281,6 +294,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const ocrGpa = (!isNaN(directGpaVal) && directGpaVal >= 0 && directGpaVal <= 4.0)
     ? directGpaVal
     : (ocrGrade ? gradeToGpa(ocrGrade) : null)
+
+  // ── Anti-cheat 5: Cross-member OCR uniqueness ────────────────
+  // If another member in the same semester/round submitted identical OCR text,
+  // they are sharing the same screenshot (the first 300 chars are compared).
+  if (!duplicate_flag && ocrRawText && ocrRawText.length > 100) {
+    const ocrQuery = supabaseAdmin.from('submissions')
+      .select('ocr_raw_text').neq('member_id', user.id).not('ocr_raw_text', 'is', null)
+    const { data: peerOcr } = await (roundId
+      ? ocrQuery.eq('round_id', roundId)
+      : ocrQuery.eq('semester_id', semesterId))
+    const prefix = ocrRawText.substring(0, 300)
+    if (peerOcr?.some(s => s.ocr_raw_text != null && s.ocr_raw_text.startsWith(prefix))) duplicate_flag = true
+  }
+
+  // ── Anti-cheat 6: Semester year match ──────────────────────
+  // If the semester name contains a 4-digit year (e.g. "Fall 2025"), the OCR
+  // text must contain that year — catches prior-semester screenshots.
+  if (!duplicate_flag && ocrRawText && ocrRawText.length > 50) {
+    const yearMatch = semester.name.match(/\b(20\d{2})\b/)
+    if (yearMatch && !ocrRawText.includes(yearMatch[1])) duplicate_flag = true
+  }
+
+  // ── Anti-cheat 7: GPA mathematical consistency ───────────────
+  // If 3+ course grades were extracted, compute an unweighted GPA estimate and
+  // compare to the OCR GPA. Tolerance of 0.7 accounts for credit-hour weighting.
+  if (!duplicate_flag && ocrGpa !== null && Object.keys(courseGradesData).length >= 3) {
+    const LETTER_GPA: Record<string, number> = {
+      'A+': 4.0, 'A': 4.0, 'A-': 3.7,
+      'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+      'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+      'D+': 1.3, 'D': 1.0, 'D-': 0.7, 'F': 0.0,
+    }
+    const numericGrades = Object.values(courseGradesData)
+      .map(g => LETTER_GPA[g.trim().replace(/\s/g, '').toUpperCase()])
+      .filter((v): v is number => v !== undefined)
+    if (numericGrades.length >= 3) {
+      const computedGpa = numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length
+      if (Math.abs(computedGpa - ocrGpa) > 0.7) duplicate_flag = true
+    }
+  }
+
+  // ── Anti-cheat 8: Minimum OCR text length ───────────────────
+  // A real grade page should produce at least 40 characters of OCR text.
+  // Very short OCR suggests a blank screenshot or a mocked submission.
+  if (!duplicate_flag && ocrRawText.trim().length < 40) duplicate_flag = true
+
+  // ── Anti-cheat 9: Digit presence check ──────────────────────
+  // Real grade pages contain numbers (credit hours, GPAs, course codes).
+  // Substantial OCR text with fewer than 3 digits is not a grade page.
+  if (!duplicate_flag && ocrRawText && ocrRawText.length > 100) {
+    const digitCount = (ocrRawText.match(/\d/g) ?? []).length
+    if (digitCount < 3) duplicate_flag = true
+  }
 
   const { error: insertError } = await supabaseAdmin.from('submissions').insert({
     member_id: user.id,

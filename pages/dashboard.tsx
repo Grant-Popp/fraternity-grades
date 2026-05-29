@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 function TrendArrow({ current, previous }: { current: number; previous: number | null }) {
   if (previous == null) return null
   const diff = current - previous
-  if (Math.abs(diff) < 0.05) return <span className="text-slate-400 text-sm ml-1">→</span>
+  if (Math.abs(diff) < 0.05) return null
   if (diff > 0) return <span className="text-green-400 text-sm ml-1" title={`+${diff.toFixed(2)} from last`}>↑</span>
   return <span className="text-red-400 text-sm ml-1" title={`${diff.toFixed(2)} from last`}>↓</span>
 }

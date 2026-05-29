@@ -25,20 +25,23 @@ export default function Layout({ children, title }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-900">
       <nav className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-amber-500 font-bold text-lg">📚 Grade Portal</span>
+        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14 gap-3">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
+            <div className="w-7 h-7 rounded-md bg-amber-500 flex items-center justify-center shrink-0">
+              <span className="text-slate-900 font-black text-xs select-none">GP</span>
+            </div>
+            <span className="text-white font-semibold text-sm hidden xs:inline sm:inline">Grade Portal</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {router.pathname === '/dashboard' ? (
               <span className="text-sm text-amber-400 font-semibold">Dashboard</span>
             ) : (
-              <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white">Dashboard</Link>
+              <Link href="/dashboard" className="text-sm text-slate-300 hover:text-white transition-colors">Dashboard</Link>
             )}
             {router.pathname === '/profile' ? (
               <span className="text-sm text-amber-400 font-semibold">Profile</span>
             ) : (
-              <Link href="/profile" className="text-sm text-slate-300 hover:text-white">Profile</Link>
+              <Link href="/profile" className="text-sm text-slate-300 hover:text-white transition-colors">Profile</Link>
             )}
             <span className="text-slate-500 text-xs hidden sm:inline">{email}</span>
             <button onClick={handleLogout} className="text-sm text-slate-400 hover:text-red-400 transition-colors">
@@ -48,8 +51,8 @@ export default function Layout({ children, title }: LayoutProps) {
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {title && <h1 className="text-2xl font-bold text-white mb-6">{title}</h1>}
+      <main className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+        {title && <h1 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">{title}</h1>}
         {children}
       </main>
     </div>

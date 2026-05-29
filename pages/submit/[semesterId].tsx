@@ -229,6 +229,18 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
   }
 
   // ── Photo / OCR ───────────────────────────────────────────
+  const handleClearPhoto = () => {
+    if (preview) URL.revokeObjectURL(preview)
+    setFile(null)
+    setPreview(null)
+    setOcrState(null)
+    setSelectedGrade('')
+    setOcrFailed(false)
+    const fileInput = document.getElementById('grade-photo') as HTMLInputElement
+    if (fileInput) fileInput.value = ''
+    setStep('choose')
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
@@ -412,33 +424,37 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
             </div>
             <div className="space-y-2 mb-4">
               {courseRows.map(row => (
-                <div key={row.key} className="grid grid-cols-[1fr_2fr_60px_28px] gap-2 items-center">
-                  <input
-                    className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
-                    placeholder="ENGR 110"
-                    value={row.course_id}
-                    onChange={e => updateCourseRow(row.key, 'course_id', e.target.value)}
-                  />
-                  <input
-                    className="input !py-1.5 !text-sm"
-                    placeholder="Engineering Fundamentals"
-                    value={row.course_name}
-                    onChange={e => updateCourseRow(row.key, 'course_name', e.target.value)}
-                  />
-                  <input
-                    className="input !py-1.5 !text-sm text-center"
-                    placeholder="3"
-                    type="number"
-                    min={1}
-                    max={6}
-                    value={row.credits}
-                    onChange={e => updateCourseRow(row.key, 'credits', e.target.value)}
-                  />
-                  <button
-                    onClick={() => removeCourseRow(row.key)}
-                    disabled={courseRows.length === 1}
-                    className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30"
-                  >×</button>
+                <div key={row.key} className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px_28px] sm:gap-2 sm:items-center">
+                  <div className="flex gap-2 sm:contents">
+                    <input
+                      className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
+                      placeholder="ENGR 110"
+                      value={row.course_id}
+                      onChange={e => updateCourseRow(row.key, 'course_id', e.target.value)}
+                    />
+                    <input
+                      className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
+                      placeholder="3"
+                      type="number"
+                      min={1}
+                      max={6}
+                      value={row.credits}
+                      onChange={e => updateCourseRow(row.key, 'credits', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center sm:contents">
+                    <input
+                      className="input !py-1.5 !text-sm flex-1 min-w-0 sm:order-2"
+                      placeholder="Engineering Fundamentals"
+                      value={row.course_name}
+                      onChange={e => updateCourseRow(row.key, 'course_name', e.target.value)}
+                    />
+                    <button
+                      onClick={() => removeCourseRow(row.key)}
+                      disabled={courseRows.length === 1}
+                      className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 w-7 sm:order-4"
+                    >×</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -469,27 +485,29 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 if (isEditing) {
                   return (
                     <div key={c.id} className="border border-amber-500/40 bg-slate-800/60 rounded-lg px-3 py-3">
-                      <div className="grid grid-cols-[1fr_2fr_60px] gap-2 mb-2">
+                      <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px] sm:gap-2 mb-2">
+                        <div className="flex gap-2 sm:contents">
+                          <input
+                            className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
+                            placeholder="ENGR 110"
+                            value={editValues.course_id}
+                            onChange={e => setEditValues(v => ({ ...v, course_id: e.target.value }))}
+                          />
+                          <input
+                            className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
+                            placeholder="3"
+                            type="number"
+                            min={1}
+                            max={6}
+                            value={editValues.credits}
+                            onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
+                          />
+                        </div>
                         <input
-                          className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
-                          placeholder="ENGR 110"
-                          value={editValues.course_id}
-                          onChange={e => setEditValues(v => ({ ...v, course_id: e.target.value }))}
-                        />
-                        <input
-                          className="input !py-1.5 !text-sm"
+                          className="input !py-1.5 !text-sm sm:order-2"
                           placeholder="Course Name"
                           value={editValues.course_name}
                           onChange={e => setEditValues(v => ({ ...v, course_name: e.target.value }))}
-                        />
-                        <input
-                          className="input !py-1.5 !text-sm text-center"
-                          placeholder="3"
-                          type="number"
-                          min={1}
-                          max={6}
-                          value={editValues.credits}
-                          onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
                         />
                       </div>
                       {editError && <p className="text-red-400 text-xs mb-2">{editError}</p>}
@@ -567,33 +585,37 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
                 </div>
                 <div className="space-y-2 mb-2">
                   {newCourseRows.map(row => (
-                    <div key={row.key} className="grid grid-cols-[1fr_2fr_60px_28px] gap-2 items-center">
-                      <input
-                        className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
-                        placeholder="ENGR 110"
-                        value={row.course_id}
-                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_id: e.target.value } : r))}
-                      />
-                      <input
-                        className="input !py-1.5 !text-sm"
-                        placeholder="Course Name"
-                        value={row.course_name}
-                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_name: e.target.value } : r))}
-                      />
-                      <input
-                        className="input !py-1.5 !text-sm text-center"
-                        placeholder="3"
-                        type="number"
-                        min={1}
-                        max={6}
-                        value={row.credits}
-                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, credits: e.target.value } : r))}
-                      />
-                      <button
-                        onClick={() => setNewCourseRows(prev => prev.length > 1 ? prev.filter(r => r.key !== row.key) : prev)}
-                        disabled={newCourseRows.length === 1}
-                        className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30"
-                      >×</button>
+                    <div key={row.key} className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px_28px] sm:gap-2 sm:items-center">
+                      <div className="flex gap-2 sm:contents">
+                        <input
+                          className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
+                          placeholder="ENGR 110"
+                          value={row.course_id}
+                          onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_id: e.target.value } : r))}
+                        />
+                        <input
+                          className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
+                          placeholder="3"
+                          type="number"
+                          min={1}
+                          max={6}
+                          value={row.credits}
+                          onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, credits: e.target.value } : r))}
+                        />
+                      </div>
+                      <div className="flex gap-2 items-center sm:contents">
+                        <input
+                          className="input !py-1.5 !text-sm flex-1 min-w-0 sm:order-2"
+                          placeholder="Course Name"
+                          value={row.course_name}
+                          onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_name: e.target.value } : r))}
+                        />
+                        <button
+                          onClick={() => setNewCourseRows(prev => prev.length > 1 ? prev.filter(r => r.key !== row.key) : prev)}
+                          disabled={newCourseRows.length === 1}
+                          className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 w-7 sm:order-4"
+                        >×</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -652,15 +674,22 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
         {step === 'confirm' && ocrState && (
           <div className="space-y-4">
             {preview && (
-              <div className="card !p-3">
+              <div className="card !p-3 relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="Grade screenshot" className="max-h-64 object-contain w-full rounded" />
+                <img src={preview} alt="Grade screenshot" className="max-h-[60vh] object-contain w-full rounded" />
+                <button
+                  type="button"
+                  onClick={handleClearPhoto}
+                  className="absolute top-4 right-4 bg-slate-900/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-full w-8 h-8 flex items-center justify-center text-lg leading-none transition-colors"
+                  aria-label="Remove photo"
+                >×</button>
+                {file && <p className="text-slate-500 text-xs mt-1.5 truncate">{file.name}</p>}
               </div>
             )}
             <div className="card">
               <h3 className="font-semibold text-white mb-3">OCR Result</h3>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-slate-400 text-sm">Detection confidence:</p>
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-3">
+                <p className="text-slate-400 text-sm shrink-0">Detection confidence:</p>
                 <span className={`text-sm font-medium ${confidenceColors[ocrState.confidence]}`}>
                   {confidenceLabel[ocrState.confidence]}
                 </span>
@@ -764,7 +793,7 @@ export default function SubmitPage({ semester, alreadySubmitted, activeRound, me
             )}
             {error && <p className="text-red-400 text-sm bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
             <div className="flex gap-3">
-              <button onClick={() => setStep('choose')} className="btn-secondary flex-1">← Back</button>
+              <button onClick={handleClearPhoto} className="btn-secondary flex-1">← Change Photo</button>
               <button onClick={handleSubmitPhoto} className="btn-primary flex-1" disabled={submitting}>
                 {submitting ? 'Submitting…' : 'Submit Grade'}
               </button>

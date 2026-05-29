@@ -45,12 +45,10 @@ function GpaEditor({
   sub,
   onSave,
   onDecline,
-  isExpanded,
 }: {
   sub: EnrichedSubmission
   onSave: (id: string, gpa: number | null, notes: string) => void
   onDecline: (id: string) => void
-  isExpanded: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [grade, setGrade] = useState(sub.admin_gpa?.toString() ?? '')
@@ -118,18 +116,13 @@ function GpaEditor({
     )
   }
 
-  // Require photo to be viewed before acting on pending photo submissions
-  const needsPhotoView = !!sub.photo_url && !isExpanded && sub.status === 'pending' && !sub.no_grade
-
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className={`font-semibold ${sub.final_gpa != null ? gpaColorClass(sub.final_gpa) : 'text-slate-400'}`}>
         {sub.final_gpa?.toFixed(2) ?? '—'}
       </span>
 
-      {needsPhotoView ? (
-        <span className="text-xs text-slate-600 italic">↑ view photo first</span>
-      ) : declining ? (
+      {declining ? (
         <div className="flex items-center gap-1 flex-wrap">
           <input
             className="input !py-0.5 !px-2 !text-xs w-36"
@@ -388,7 +381,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <GpaEditor sub={s} onSave={handleSave} onDecline={handleDecline} isExpanded={expandedId === s.id} />
+                      <GpaEditor sub={s} onSave={handleSave} onDecline={handleDecline} />
                     </td>
                     <td className="px-4 py-3"><StatusBadge s={s} /></td>
                     <td className="px-4 py-3">

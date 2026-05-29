@@ -243,18 +243,18 @@ async function buildBarChartPng(
 ): Promise<string | null> {
   try {
     const sharp = (await import('sharp')).default
-    const W = 520, H = 250
-    const cL = 52, cR = W - 16, cT = 36, cB = H - 46
+    const W = 560, H = 280
+    const cL = 56, cR = W - 20, cT = 42, cB = H - 52
     const cW = cR - cL, cH = cB - cT
     const toY = (g: number): number => cB - (g / 4.0) * cH
-    const barW = 72, barGap = 28
+    const barW = 80, barGap = 28
     const totalBarW = yearData.length * barW + Math.max(0, yearData.length - 1) * barGap
     const barsStart = cL + (cW - totalBarW) / 2
 
     const gridLines = [1, 2, 3, 4].map(g => {
       const y = toY(g)
       return `<line x1="${cL}" y1="${y.toFixed(1)}" x2="${cR}" y2="${y.toFixed(1)}" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="${(cL - 6).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" fill="#94A3B8">${g}.0</text>`
+<text x="${(cL - 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="Arial,sans-serif" font-size="11" fill="#94A3B8">${g}.0</text>`
     }).join('\n')
 
     const barsSvg = yearData.map(({ year, count, avg }, i) => {
@@ -262,23 +262,23 @@ async function buildBarChartPng(
       const cx = (x + barW / 2).toFixed(1)
       if (avg === null) {
         return `<rect x="${x.toFixed(1)}" y="${(cB - 6).toFixed(1)}" width="${barW}" height="6" fill="#CBD5E1" rx="2"/>
-<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#64748B">${year}</text>
-<text x="${cx}" y="${(cB - 10).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#94A3B8">N/A</text>`
+<text x="${cx}" y="${(cB + 18).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#64748B">${year}</text>
+<text x="${cx}" y="${(cB - 10).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#94A3B8">N/A</text>`
       }
       const barTop = toY(avg)
       const barH = cB - barTop
-      const fill   = avg >= 3.0 ? '#4ADE80' : avg >= 2.5 ? '#FCD34D' : '#F87171'
+      const fill   = avg >= 3.0 ? '#86EFAC' : avg >= 2.5 ? '#FDE68A' : '#FCA5A5'
       const stroke = avg >= 3.0 ? '#16A34A' : avg >= 2.5 ? '#D97706' : '#DC2626'
       const tf     = avg >= 3.0 ? '#166534' : avg >= 2.5 ? '#92400E' : '#991B1B'
       return `<rect x="${x.toFixed(1)}" y="${barTop.toFixed(1)}" width="${barW}" height="${barH.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="1.5" rx="4"/>
-<text x="${cx}" y="${(barTop - 7).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="12" font-weight="bold" fill="${tf}">${avg.toFixed(2)}</text>
-<text x="${cx}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="10" fill="#334155">${year}</text>
-<text x="${cx}" y="${(cB + 28).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#94A3B8">${count} mbrs</text>`
+<text x="${cx}" y="${(barTop - 8).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="bold" fill="${tf}">${avg.toFixed(2)}</text>
+<text x="${cx}" y="${(cB + 18).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#334155">${year}</text>
+<text x="${cx}" y="${(cB + 32).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="9" fill="#94A3B8">${count} member${count !== 1 ? 's' : ''}</text>`
     }).join('\n')
 
     const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#F8FAFC" rx="6"/>
-<text x="${W / 2}" y="22" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="13" font-weight="bold" fill="#0F172A">Avg GPA by Class Year</text>
+<text x="${W / 2}" y="26" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#0F172A">GPA by Class Year</text>
 <line x1="${cL}" y1="${cT}" x2="${cL}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 <line x1="${cL}" y1="${cB}" x2="${cR}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 ${gridLines}
@@ -297,8 +297,8 @@ async function buildGpaTrendPng(
 ): Promise<string | null> {
   try {
     const sharp = (await import('sharp')).default
-    const W = 620, H = 290
-    const cL = 52, cR = W - 24, cT = 38, cB = H - 54
+    const W = 640, H = 320
+    const cL = 56, cR = W - 28, cT = 44, cB = H - 60
     const cW = cR - cL, cH = cB - cT
     const toY = (g: number): number => cB - (g / 4.0) * cH
 
@@ -311,11 +311,10 @@ async function buildGpaTrendPng(
     const xAt = (idx: number): number =>
       pts.length > 1 ? cL + (idx / (pts.length - 1)) * cW : cL + cW / 2
 
-    // Y-axis grid lines
     const gridLines = [1.0, 2.0, 3.0, 4.0].map(g => {
       const y = toY(g)
       return `<line x1="${cL}" y1="${y.toFixed(1)}" x2="${cR}" y2="${y.toFixed(1)}" stroke="#E2E8F0" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="${cL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" fill="#94A3B8">${g.toFixed(1)}</text>`
+<text x="${(cL - 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-family="Arial,sans-serif" font-size="11" fill="#94A3B8">${g.toFixed(1)}</text>`
     }).join('\n')
 
     // Trend line via linear regression
@@ -330,48 +329,34 @@ async function buildGpaTrendPng(
       const sxx = xs.reduce((a, b) => a + b * b, 0)
       const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1)
       const intercept = (sy - slope * sx) / n
-      const ty0 = toY(Math.max(0, Math.min(4, intercept)))
-      const ty1 = toY(Math.max(0, Math.min(4, intercept + slope * (n - 1))))
-      const trendColor = slope > 0.05 ? '#4ADE80' : slope < -0.05 ? '#F87171' : '#94A3B8'
-      trendSvg = `<line x1="${xAt(0).toFixed(1)}" y1="${ty0.toFixed(1)}" x2="${xAt(n - 1).toFixed(1)}" y2="${ty1.toFixed(1)}" stroke="${trendColor}" stroke-width="2" stroke-dasharray="6,4" opacity="0.7"/>`
+      const ty0 = toY(Math.max(0.1, Math.min(4, intercept)))
+      const ty1 = toY(Math.max(0.1, Math.min(4, intercept + slope * (n - 1))))
+      const trendColor = slope > 0.05 ? '#86EFAC' : slope < -0.05 ? '#FCA5A5' : '#CBD5E1'
+      trendSvg = `<line x1="${xAt(0).toFixed(1)}" y1="${ty0.toFixed(1)}" x2="${xAt(n - 1).toFixed(1)}" y2="${ty1.toFixed(1)}" stroke="${trendColor}" stroke-width="2" stroke-dasharray="6,4" opacity="0.8"/>`
     }
 
-    // Main polyline
     const polyPts = pts.map((p, i) => `${xAt(i).toFixed(1)},${toY(p.avg).toFixed(1)}`).join(' ')
 
-    // Data points
     const dotsSvg = pts.map((p, i) => {
       const x = xAt(i)
       const y = toY(p.avg)
       const fill = p.avg >= 3.0 ? '#4ADE80' : p.avg >= 2.5 ? '#FCD34D' : '#F87171'
       const tf = p.avg >= 3.0 ? '#166534' : p.avg >= 2.5 ? '#92400E' : '#991B1B'
-      const shortLabel = p.name.length > 9 ? p.name.slice(0, 9) + '…' : p.name
-      // Trend arrow between consecutive points
-      let arrowSvg = ''
-      if (i > 0) {
-        const diff = p.avg - pts[i - 1].avg
-        const ch = Math.abs(diff) < 0.05 ? '→' : diff > 0 ? '↑' : '↓'
-        const ac = diff > 0.05 ? '#4ADE80' : diff < -0.05 ? '#F87171' : '#94A3B8'
-        const mx = (x + xAt(i - 1)) / 2
-        const my = (y + toY(pts[i - 1].avg)) / 2 - 10
-        arrowSvg = `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="13" fill="${ac}" opacity="0.8">${ch}</text>`
-      }
-      return `${arrowSvg}
-<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${fill}" stroke="white" stroke-width="2"/>
-<text x="${x.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="11" font-weight="bold" fill="${tf}">${p.avg.toFixed(2)}</text>
-<text x="${x.toFixed(1)}" y="${(cB + 16).toFixed(1)}" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#334155" transform="rotate(-15,${x.toFixed(1)},${(cB + 16).toFixed(1)})">${shortLabel}</text>`
+      const shortLabel = p.name.length > 10 ? p.name.slice(0, 10) + '…' : p.name
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${fill}" stroke="white" stroke-width="2"/>
+<text x="${x.toFixed(1)}" y="${(y - 13).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="${tf}">${p.avg.toFixed(2)}</text>
+<text x="${x.toFixed(1)}" y="${(cB + 18).toFixed(1)}" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#475569">${shortLabel}</text>`
     }).join('\n')
 
     const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
 <rect width="${W}" height="${H}" fill="#F8FAFC" rx="8"/>
-<text x="${W / 2}" y="24" text-anchor="middle" font-family="'Liberation Sans',Arial,sans-serif" font-size="14" font-weight="bold" fill="#0F172A">Chapter GPA Trend Over Time</text>
+<text x="${W / 2}" y="27" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="#0F172A">Chapter GPA Trend</text>
 <line x1="${cL}" y1="${cT}" x2="${cL}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 <line x1="${cL}" y1="${cB}" x2="${cR}" y2="${cB}" stroke="#CBD5E1" stroke-width="1.5"/>
 ${gridLines}
 ${trendSvg}
-<polyline points="${polyPts}" fill="none" stroke="#0EA5E9" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="${polyPts}" fill="none" stroke="#38BDF8" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 ${dotsSvg}
-<text x="${cR}" y="${H - 6}" text-anchor="end" font-family="'Liberation Sans',Arial,sans-serif" font-size="9" fill="#94A3B8">dashed = trend direction</text>
 </svg>`
 
     return (await sharp(Buffer.from(svg)).png().toBuffer()).toString('base64')

@@ -11,7 +11,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       httpOnly: true,
       secure: isProd,
       sameSite: 'lax',
-      maxAge: expiresIn ?? 3600,
+      maxAge: Math.min(expiresIn ?? 3600, 86400),
       path: '/',
     }))
     return res.status(200).json({ ok: true })

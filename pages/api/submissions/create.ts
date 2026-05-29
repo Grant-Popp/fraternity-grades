@@ -165,6 +165,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (existing) return res.status(400).json({ error: 'Already submitted for this semester' })
   }
 
+  // Rate limit: max 5 photo submissions per hour to prevent storage abuse
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { count: recentCount } = await supabaseAdmin
+    .from('submissions').select('id', { count: 'exact', head: true })
+    .eq('member_id', user.id).gte('submitted_at', oneHourAgo)
+  if ((recentCount ?? 0) >= 5) {
+    return res.status(429).json({ error: 'Too many submission attempts. Please try again in an hour.' })
+  }
+
   // Read file safely
   let fileBuffer: Buffer
   try {
@@ -397,5 +406,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('[email] confirmation send failed:', err?.message)
   }
 
-  return res.status(200).json({ ok: true, duplicateFlag: duplicate_flag })
+  return res.status(200).json({ ok: true })
 }

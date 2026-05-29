@@ -6,9 +6,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="text-center max-w-xl">
-        <div className="w-20 h-20 rounded-2xl bg-amber-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-amber-500/25">
-          <span className="text-slate-900 font-black text-2xl tracking-tight select-none">GP</span>
-        </div>
+        <div className="mb-6 text-7xl">📚</div>
         <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
           Chapter <span className="text-amber-500">Grade Portal</span>
         </h1>

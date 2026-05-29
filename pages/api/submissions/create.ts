@@ -235,15 +235,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
 
   // ── Anti-cheat 2: Perceptual hash ────────────────────────────
-  // Catches identical or near-identical images reused across ANY past submission —
-  // same semester, cross-semester own reuse, and cross-member sharing.
-  // Threshold tightened to 8 (from default 10) to reduce false negatives.
+  // Catches identical or near-identical images reused across ANY past submission.
+  // Threshold 8 (tightened from 10). When a match is found, retroactively flags
+  // any still-pending submissions from the same semester/round that shared the photo
+  // so both the sharer and the original submitter are caught.
   try {
     photo_phash = await computePhash(fileBuffer)
     const { data: allPastSubs } = await supabaseAdmin
-      .from('submissions').select('photo_phash').not('photo_phash', 'is', null).limit(2000)
+      .from('submissions')
+      .select('id, photo_phash, member_id, round_id, semester_id, status')
+      .not('photo_phash', 'is', null)
+      .limit(2000)
+    const currentHash = photo_phash
     const allHashes = (allPastSubs ?? []).map((s: any) => s.photo_phash).filter(Boolean) as string[]
-    if (isDuplicate(photo_phash, allHashes, 8)) duplicate_flag = true
+    if (isDuplicate(currentHash, allHashes, 8)) {
+      duplicate_flag = true
+      // Retroactively flag same-scope pending submissions whose photo matches this one
+      const toFlag = (allPastSubs ?? []).filter((s: any) =>
+        s.photo_phash &&
+        s.member_id !== user.id &&
+        s.status === 'pending' &&
+        (roundId ? s.round_id === roundId : s.semester_id === semesterId) &&
+        isDuplicate(currentHash, [s.photo_phash], 8)
+      )
+      if (toFlag.length > 0) {
+        await Promise.all(toFlag.map((s: any) =>
+          supabaseAdmin.from('submissions').update({ duplicate_flag: true }).eq('id', s.id)
+        ))
+      }
+    }
   } catch {}
 
   // ── Anti-cheat 3: Identity checks ───────────────────────────
@@ -284,8 +304,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!duplicate_flag && ocrRawText && ocrRawText.length > 100) {
     const ocrLower = ocrRawText.toLowerCase()
     const portalKeywords = ['grade', 'gpa', 'credit', 'course', 'points', 'blackboard', 'canvas',
-      'moodle', 'banner', 'semester', 'enrolled', 'gradebook', 'cumulative', 'academic', 'transcript']
+      'moodle', 'banner', 'semester', 'enrolled', 'gradebook', 'cumulative', 'academic', 'transcript',
+      'louisville', 'ulink', 'attempt', 'submitted']
+    // Blackboard counts double — it's the definitive portal for this chapter
     const kwHits = portalKeywords.filter(kw => ocrLower.includes(kw)).length
+      + (ocrLower.includes('blackboard') ? 1 : 0)
     if (kwHits < 2) duplicate_flag = true
   }
 

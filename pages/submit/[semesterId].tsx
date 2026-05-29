@@ -863,7 +863,7 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                               className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
                                 p?.noGrade
                                   ? 'bg-amber-900/20 border-amber-600 text-amber-300'
-                                  : 'border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300'
+                                  : 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200'
                               }`}
                             >
                               {p?.noGrade ? '✓ No grade' : 'No grade'}

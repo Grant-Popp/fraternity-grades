@@ -147,8 +147,8 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
 
       {/* Open submissions */}
       {hasOpen && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-3">Open Submissions</h2>
+        <section className="mb-10">
+          <h2 className="text-xl font-bold text-white mb-4">Open Submissions</h2>
           <div className="space-y-3">
 
             {/* Round-based entries */}
@@ -254,7 +254,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
       {/* Past history */}
       {past.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-white mb-3">Past Semesters</h2>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Past Semesters</h2>
           <div className="space-y-3">
             {past.map((group) => {
               const multiRound = group.rounds.length > 1
@@ -262,7 +262,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
               const allDone = group.rounds.every(r => r.submission?.status === 'reviewed' || r.submission?.status === 'no_grade')
               const accentColor = anyDeclined ? 'border-l-red-500' : allDone ? 'border-l-green-500' : 'border-l-slate-600'
               return (
-                <div key={group.semesterId} className={`card border-l-4 ${accentColor} !pl-4`}>
+                <div key={group.semesterId} className={`card border-l-4 ${accentColor} !pl-4 opacity-80`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-white">{group.semesterName}</p>

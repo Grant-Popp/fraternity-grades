@@ -897,8 +897,10 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const { data: semester } = await supabase.from('semesters').select('*').eq('id', semesterId).single()
   if (!semester) return { notFound: true }
 
-  // Find the active round for this semester (most recent if multiple active somehow)
-  const { data: activeRound } = await supabase
+  const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
+
+  // Find the active round for this semester — use admin client to bypass RLS
+  const { data: activeRound } = await admin
     .from('semester_rounds')
     .select('*')
     .eq('semester_id', semesterId)

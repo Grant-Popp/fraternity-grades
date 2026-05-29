@@ -304,6 +304,8 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
 
   const memberYear = profile?.class_year ?? ''
 
+  const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
+
   const [
     { data: semesters },
     { data: activeRoundsRaw },
@@ -311,7 +313,7 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     { data: courseRows },
   ] = await Promise.all([
     supabase.from('semesters').select('*').order('created_at', { ascending: false }),
-    supabase.from('semester_rounds').select('*').eq('is_active', true).order('round_number', { ascending: false }),
+    admin.from('semester_rounds').select('*').eq('is_active', true).order('round_number', { ascending: false }),
     supabase.from('submissions').select('*').eq('member_id', session!.user.id),
     supabase.from('member_courses').select('semester_id').eq('member_id', session!.user.id),
   ])
@@ -321,11 +323,12 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const subBySemId = new Map((submissions ?? []).filter((s: any) => !s.round_id).map((s: any) => [s.semester_id, s]))
   const coursesEnteredFor = new Set((courseRows ?? []).map((c: any) => c.semester_id))
 
-  // Active rounds (only for active semesters the member is required to submit for)
+  // Active rounds — shown regardless of semester.is_active so closing a semester
+  // doesn't hide a round the admin has explicitly marked active
   const roundSemesterIds = new Set<string>()
   const activeRounds: ActiveRoundEntry[] = (activeRoundsRaw ?? []).flatMap((r: any) => {
     const sem = semMap.get(r.semester_id)
-    if (!sem?.is_active) return []
+    if (!sem) return []
     if (sem.required_years?.length && !sem.required_years.includes(memberYear)) return []
     roundSemesterIds.add(r.semester_id)
     return [{
@@ -343,9 +346,9 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     .filter((s: any) => !s.required_years?.length || s.required_years.includes(memberYear))
     .map((s: any) => ({ ...s, submission: subBySemId.get(s.id) ?? null }))
 
-  // Past (inactive) semesters for history — expanded per round if rounds exist
+  // Past (inactive) semesters for history — exclude any semester that has an active round
   const pastSems = (semesters ?? [])
-    .filter((s: any) => !s.is_active)
+    .filter((s: any) => !s.is_active && !roundSemesterIds.has(s.id))
     .filter((s: any) => !s.required_years?.length || s.required_years.includes(memberYear))
 
   const pastSemesterIds = pastSems.map((s: any) => s.id)
@@ -381,7 +384,6 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   let isAtRisk = false
   let gpaThreshold = 2.5
   try {
-    const { supabaseAdmin: admin } = await import('@/lib/supabaseAdmin')
     const { data: settings } = await (admin.from('chapter_settings' as any).select('gpa_threshold').maybeSingle())
     gpaThreshold = (settings as any)?.gpa_threshold ?? 2.5
     const latestReviewed = (submissions ?? [])

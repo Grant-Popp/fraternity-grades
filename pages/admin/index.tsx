@@ -88,7 +88,7 @@ export default function AdminDashboard({ stats, signupCode: initialCode }: { sta
         {[
           { label: 'Total Members', value: stats.totalMembers, icon: '👥', note: null },
           { label: 'Pending Review', value: stats.pendingReview, icon: '📋', alert: stats.pendingReview > 0, note: stats.dropAlerts > 0 ? `${stats.dropAlerts} drop alert${stats.dropAlerts !== 1 ? 's' : ''}` : null },
-          { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa, note: stats.chapterGpa ? `${stats.reviewedCount} submitted grades` : null },
+          { label: 'Chapter GPA', value: stats.chapterGpa ? stats.chapterGpa.toFixed(2) : '—', icon: '📊', gpa: stats.chapterGpa, note: stats.chapterGpa ? `${stats.reviewedCount} of ${stats.totalMembers} members` : null },
           { label: 'Active Semester', value: stats.activeSemester?.name ?? 'None', icon: '📅', small: true, note: null },
           { label: 'Total Strikes', value: stats.totalStrikes, icon: '⚡', alert: stats.totalStrikes > 0, note: stats.totalStrikes > 0 ? 'across all members' : null },
         ].map(s => (
@@ -235,7 +235,13 @@ export default function AdminDashboard({ stats, signupCode: initialCode }: { sta
                     {codeVisible ? 'Hide' : 'Show'}
                   </button>
                   <button onClick={() => { navigator.clipboard.writeText(signupCode); }} className="text-xs text-slate-400 hover:text-amber-400 transition-colors">
-                    Copy
+                    Copy Code
+                  </button>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/auth/signup`) }}
+                    className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
+                  >
+                    Copy Signup Link
                   </button>
                   <button onClick={generateCode} disabled={codeLoading} className="text-xs text-amber-400 hover:text-amber-300 transition-colors">
                     Rotate

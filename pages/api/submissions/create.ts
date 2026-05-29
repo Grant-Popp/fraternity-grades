@@ -104,7 +104,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const semesterId = Array.isArray(fields.semesterId) ? fields.semesterId[0] : fields.semesterId
   const roundId = Array.isArray(fields.roundId) ? fields.roundId[0] : fields.roundId ?? null
-  const ocrRawText = Array.isArray(fields.ocrRawText) ? fields.ocrRawText[0] : fields.ocrRawText ?? ''
+  const ocrRawTextRaw = Array.isArray(fields.ocrRawText) ? fields.ocrRawText[0] : fields.ocrRawText ?? ''
+  const ocrRawText = ocrRawTextRaw.substring(0, 5000) // cap to prevent oversized DB payloads
   const ocrGrade = Array.isArray(fields.ocrGrade) ? fields.ocrGrade[0] : fields.ocrGrade ?? ''
   const courseGradesRaw = Array.isArray(fields.courseGrades) ? fields.courseGrades[0] : fields.courseGrades ?? '{}'
   const directGpaRaw = Array.isArray(fields.directGpa) ? fields.directGpa[0] : fields.directGpa ?? ''

@@ -85,10 +85,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   for (const m of toSend) {
     try {
       await sendEmail({ to: m.email, memberName: m.full_name, semesterName: semester.name, deadline, submitUrl, type })
-      await supabaseAdmin.from('email_logs').insert({ semester_id: semesterId, member_id: m.id, type })
+      await supabaseAdmin.from('email_logs').insert({ semester_id: semesterId, member_id: m.id, type, status: 'sent' })
       sent++
     } catch (err: any) {
       errors.push(`${m.email}: ${err.message}`)
+      // Log failure to DB so it's visible without relying on ephemeral function logs
+      await supabaseAdmin.from('email_logs').insert({
+        semester_id: semesterId,
+        member_id: m.id,
+        type,
+        status: 'failed',
+        error_message: String(err?.message ?? err).substring(0, 500),
+      }).catch(() => {}) // best-effort — don't crash the batch if log insert fails
     }
   }
 

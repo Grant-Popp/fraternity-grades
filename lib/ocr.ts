@@ -182,12 +182,13 @@ function parseOcrText(text: string): OcrResult {
     return { rawText: text, detectedGrade: grade, gpa: gradeToGpa(grade), confidence: 'medium', allGrades, courseGrades, directGpa: null }
   }
 
-  // Pattern C: percentage fallback
+  // Pattern C: percentage fallback — only accept realistic grade percentages (60-100)
+  // Anything below 60 can't be a real letter grade and was almost certainly a false OCR match
   const patternC = /(\d{1,3}(?:\.\d{1,2})?)\s*%/g
   const pctMatches = execAll(text, patternC)
   if (pctMatches.length > 0) {
     const pct = parseFloat(pctMatches[pctMatches.length - 1][1])
-    if (pct >= 0 && pct <= 100) {
+    if (pct >= 60 && pct <= 100) {
       const grade = percentageToGrade(pct)
       return { rawText: text, detectedGrade: grade, gpa: gradeToGpa(grade), confidence: 'medium', allGrades: [grade], courseGrades, directGpa: null }
     }

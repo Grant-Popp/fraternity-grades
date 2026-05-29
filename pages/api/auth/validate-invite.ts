@@ -21,6 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (code.trim().toUpperCase() !== storedCode.toUpperCase()) {
+    // Slow-down on wrong code: makes brute-forcing 8-char hex codes impractical
+    await new Promise(r => setTimeout(r, 800))
     return res.status(403).json({ error: 'Invalid invite code. Get the current code from your VP of Academics.' })
   }
 

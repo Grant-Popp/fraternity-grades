@@ -2,17 +2,20 @@
 import sharp from 'sharp'
 
 export async function computePhash(imageBuffer: Buffer): Promise<string> {
-  const { data } = await sharp(imageBuffer)
+  const { data, info } = await sharp(imageBuffer)
+    .flatten({ background: { r: 255, g: 255, b: 255 } }) // collapse alpha so PNG RGBA → RGB before grayscale
     .resize(9, 8, { fit: 'fill' })
     .grayscale()
     .raw()
     .toBuffer({ resolveWithObject: true })
 
+  const channels = info.channels // should be 1 after grayscale, but read defensively
+
   const bits: number[] = []
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
-      const idx = row * 9 + col
-      bits.push(data[idx] > data[idx + 1] ? 1 : 0)
+      const idx = (row * 9 + col) * channels
+      bits.push(data[idx] > data[idx + channels] ? 1 : 0)
     }
   }
 

@@ -230,7 +230,7 @@ export default function Dashboard({ profile, activeRounds: initialRounds, legacy
         <section>
           <h2 className="text-lg font-semibold text-white mb-3">Past Semesters</h2>
           <div className="card overflow-hidden !p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto relative [mask-image:linear-gradient(to_right,black_85%,transparent_100%)] sm:[mask-image:none]">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-900/50">

@@ -29,12 +29,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { data: actor } = await supabaseAdmin.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
   console.log(`[audit] role_change: ${actor?.full_name ?? user.id} changed ${target.full_name} from ${target.role} → ${role}`)
-  await supabaseAdmin.from('audit_logs' as any).insert({
-    admin_id: user.id,
-    action: 'role_change',
-    target_id: memberId,
-    details: { from: target.role, to: role, actor: actor?.full_name },
-  }).then(() => {}).catch(() => {})
+  try {
+    await supabaseAdmin.from('audit_logs' as any).insert({
+      admin_id: user.id,
+      action: 'role_change',
+      target_id: memberId,
+      details: { from: target.role, to: role, actor: actor?.full_name },
+    })
+  } catch {}
 
   return res.status(200).json({ ok: true })
 }

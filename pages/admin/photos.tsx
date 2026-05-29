@@ -82,13 +82,13 @@ export default function PhotoArchivePage({ photos: initialPhotos, semesters }: P
     setSaving(false)
   }
 
-  const openModal = (p: PhotoEntry) => { setSelected(p); setDeclining(false); setDeclineReason('') }
-  const closeModal = () => { setSelected(null); setDeclining(false); setDeclineReason('') }
+  const select = (p: PhotoEntry) => { setSelected(p); setDeclining(false); setDeclineReason('') }
+  const deselect = () => { setSelected(null); setDeclining(false); setDeclineReason('') }
 
   return (
     <AdminLayout title="Photo Archive">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="flex flex-wrap gap-3 mb-5">
         <input
           className="input !py-1.5 !text-sm w-44"
           placeholder="Search member…"
@@ -106,140 +106,141 @@ export default function PhotoArchivePage({ photos: initialPhotos, semesters }: P
           <option value="declined">Declined</option>
           <option value="no_grade">No Grade</option>
         </select>
-        <span className="text-slate-500 text-sm self-center ml-auto">{filtered.length} photo{filtered.length !== 1 ? 's' : ''}</span>
+        <span className="text-slate-500 text-sm self-center ml-auto">
+          {filtered.length} photo{filtered.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {filtered.length === 0 ? (
         <div className="card text-center py-12 text-slate-400">No photos match your filters.</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filtered.map(p => (
-            <button
-              key={p.id}
-              onClick={() => openModal(p)}
-              className="card !p-0 overflow-hidden text-left hover:ring-2 hover:ring-amber-500/50 transition-all"
-            >
-              <div className="relative bg-slate-800" style={{ aspectRatio: '4/3' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.photo_url} alt={p.member_name} className="w-full h-full object-cover" />
-                {p.duplicate_flag && (
-                  <span className="absolute top-1.5 right-1.5 bg-amber-500/90 text-slate-900 text-[10px] font-bold px-1.5 py-0.5 rounded">⚠</span>
-                )}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900/80 to-transparent px-2 py-2">
-                  <StatusPill status={p.status} />
-                </div>
-              </div>
-              <div className="px-2.5 py-2">
-                <p className="text-white text-xs font-semibold truncate">{p.member_name}</p>
-                <p className="text-slate-500 text-[11px] truncate">
-                  {p.semester_name}{p.round_name ? ` · ${p.round_name}` : ''}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Modal */}
-      {selected && (
-        <div
-          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
-          onClick={e => { if (e.target === e.currentTarget) closeModal() }}
-        >
-          <div className="bg-slate-800 rounded-xl border border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-start justify-between px-5 py-4 border-b border-slate-700">
-              <div>
-                <p className="text-white font-semibold">{selected.member_name}</p>
-                <p className="text-slate-400 text-sm">
-                  {selected.semester_name}{selected.round_name ? ` · ${selected.round_name}` : ''}
-                </p>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  {new Date(selected.submitted_at).toLocaleString()}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusPill status={selected.status} />
-                <button onClick={closeModal} className="text-slate-400 hover:text-white text-2xl leading-none">×</button>
-              </div>
-            </div>
-
-            {/* Photo */}
-            <div className="px-5 pt-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selected.photo_url}
-                alt="Grade screenshot"
-                className="w-full rounded-lg border border-slate-700"
-              />
-            </div>
-
-            {/* Meta + actions */}
-            <div className="px-5 py-4 space-y-3">
-              <div className="flex flex-wrap gap-4 text-sm">
-                {selected.ocr_gpa != null && (
-                  <span className="text-slate-400">
-                    OCR: <span className={`font-semibold ${gpaColorClass(selected.ocr_gpa)}`}>{selected.ocr_gpa.toFixed(2)}</span>
-                  </span>
-                )}
-                {selected.final_gpa != null && (
-                  <span className="text-slate-400">
-                    Final GPA: <span className={`font-semibold ${gpaColorClass(selected.final_gpa)}`}>{selected.final_gpa.toFixed(2)}</span>
-                  </span>
-                )}
-                {selected.duplicate_flag && (
-                  <span className="text-amber-400 text-xs font-medium">⚠ Flagged as possible duplicate</span>
-                )}
-              </div>
-
-              {selected.admin_notes && (
-                <p className="text-slate-400 text-xs italic bg-slate-900/40 px-3 py-2 rounded-lg">{selected.admin_notes}</p>
-              )}
-
-              <div className="flex items-center gap-3 flex-wrap pt-1">
-                <Link href={`/admin/members/${selected.member_id}`} className="text-xs text-slate-400 hover:text-white underline">
-                  View member profile →
-                </Link>
-
-                {selected.status !== 'reviewed' && !declining && (
-                  <button onClick={() => approve(selected)} disabled={saving} className="btn-primary text-xs py-1.5 px-4 ml-auto">
-                    {saving ? '…' : '✓ Approve'}
-                  </button>
-                )}
-                {!declining && (
-                  <button
-                    onClick={() => setDeclining(true)}
-                    disabled={saving}
-                    className="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded border border-red-800/40 transition-colors"
-                  >
-                    ✗ Decline
-                  </button>
-                )}
-              </div>
-
-              {declining && (
-                <div className="space-y-2 pt-1">
-                  <input
-                    className="input !py-1.5 !text-sm w-full"
-                    placeholder="Decline reason (optional, sent to member)"
-                    value={declineReason}
-                    onChange={e => setDeclineReason(e.target.value)}
-                    maxLength={500}
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => decline(selected)} disabled={saving}
-                      className="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded border border-red-800/40">
-                      {saving ? '…' : 'Confirm Decline'}
-                    </button>
-                    <button onClick={() => { setDeclining(false); setDeclineReason('') }}
-                      className="text-xs text-slate-500 hover:text-slate-300">
-                      Cancel
-                    </button>
+        <div className="flex gap-5 items-start">
+          {/* Grid */}
+          <div className={selected ? 'w-64 shrink-0' : 'w-full'}>
+            <div className={`grid gap-3 ${selected ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
+              {filtered.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => p.id === selected?.id ? deselect() : select(p)}
+                  className={`card !p-0 overflow-hidden text-left transition-all ${
+                    p.id === selected?.id
+                      ? 'ring-2 ring-amber-500'
+                      : 'hover:ring-2 hover:ring-amber-500/40'
+                  }`}
+                >
+                  <div className="relative bg-slate-800" style={{ aspectRatio: '4/3' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.photo_url} alt={p.member_name} className="w-full h-full object-cover" />
+                    {p.duplicate_flag && (
+                      <span className="absolute top-1 right-1 bg-amber-500/90 text-slate-900 text-[9px] font-bold px-1 py-0.5 rounded">⚠</span>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-slate-900/80 to-transparent px-1.5 py-1.5">
+                      <StatusPill status={p.status} />
+                    </div>
                   </div>
-                </div>
-              )}
+                  <div className="px-2 py-1.5">
+                    <p className="text-white text-[11px] font-semibold truncate">{p.member_name}</p>
+                    <p className="text-slate-500 text-[10px] truncate">{p.semester_name}{p.round_name ? ` · ${p.round_name}` : ''}</p>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Detail panel */}
+          {selected && (
+            <div className="flex-1 sticky top-4 self-start card !p-0 overflow-hidden">
+              {/* Panel header */}
+              <div className="flex items-start justify-between px-4 py-3 border-b border-slate-700">
+                <div>
+                  <p className="text-white font-semibold">{selected.member_name}</p>
+                  <p className="text-slate-400 text-sm">
+                    {selected.semester_name}{selected.round_name ? ` · ${selected.round_name}` : ''}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-0.5">{new Date(selected.submitted_at).toLocaleString()}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusPill status={selected.status} />
+                  <button onClick={deselect} className="text-slate-500 hover:text-white text-xl leading-none ml-1">×</button>
+                </div>
+              </div>
+
+              {/* Full photo */}
+              <div className="bg-slate-950">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selected.photo_url}
+                  alt="Grade screenshot"
+                  className="w-full object-contain max-h-[60vh]"
+                />
+              </div>
+
+              {/* Meta + actions */}
+              <div className="px-4 py-3 space-y-3">
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {selected.ocr_gpa != null && (
+                    <span className="text-slate-400">
+                      OCR: <span className={`font-semibold ${gpaColorClass(selected.ocr_gpa)}`}>{selected.ocr_gpa.toFixed(2)}</span>
+                    </span>
+                  )}
+                  {selected.final_gpa != null && (
+                    <span className="text-slate-400">
+                      Final: <span className={`font-semibold ${gpaColorClass(selected.final_gpa)}`}>{selected.final_gpa.toFixed(2)}</span>
+                    </span>
+                  )}
+                  {selected.duplicate_flag && (
+                    <span className="text-amber-400 text-xs font-medium">⚠ Flagged as possible duplicate</span>
+                  )}
+                </div>
+
+                {selected.admin_notes && (
+                  <p className="text-slate-400 text-xs italic bg-slate-900/40 px-3 py-2 rounded-lg">{selected.admin_notes}</p>
+                )}
+
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Link href={`/admin/members/${selected.member_id}`} className="text-xs text-slate-400 hover:text-white underline">
+                    View member →
+                  </Link>
+                  {selected.status !== 'reviewed' && !declining && (
+                    <button onClick={() => approve(selected)} disabled={saving} className="btn-primary text-xs py-1.5 px-4 ml-auto">
+                      {saving ? '…' : '✓ Approve'}
+                    </button>
+                  )}
+                  {!declining && (
+                    <button
+                      onClick={() => setDeclining(true)}
+                      disabled={saving}
+                      className={`text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded border border-red-800/40 transition-colors ${selected.status === 'reviewed' ? 'ml-auto' : ''}`}
+                    >
+                      ✗ Decline
+                    </button>
+                  )}
+                </div>
+
+                {declining && (
+                  <div className="space-y-2">
+                    <input
+                      className="input !py-1.5 !text-sm w-full"
+                      placeholder="Decline reason (optional, sent to member)"
+                      value={declineReason}
+                      onChange={e => setDeclineReason(e.target.value)}
+                      maxLength={500}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => decline(selected)} disabled={saving}
+                        className="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded border border-red-800/40">
+                        {saving ? '…' : 'Confirm Decline'}
+                      </button>
+                      <button onClick={() => { setDeclining(false); setDeclineReason('') }}
+                        className="text-xs text-slate-500 hover:text-slate-300">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </AdminLayout>
@@ -261,11 +262,19 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
     supabaseAdmin.from('semesters').select('id, name').order('created_at', { ascending: false }),
   ])
 
+  // photo_url stores the raw storage path — generate signed URLs so the browser can load them
+  const paths = (subsRaw ?? []).map((s: any) => s.photo_url as string)
+  const { data: signedData } = paths.length > 0
+    ? await supabaseAdmin.storage.from('grade-photos').createSignedUrls(paths, 7200)
+    : { data: [] }
+
+  const signedMap = new Map((signedData ?? []).map((s: any) => [s.path, s.signedUrl]))
+
   const photos: PhotoEntry[] = (subsRaw ?? []).map((s: any) => ({
     id: s.id,
     member_id: s.member_id,
     member_name: s.profiles?.full_name ?? '—',
-    photo_url: s.photo_url,
+    photo_url: signedMap.get(s.photo_url) ?? s.photo_url,
     semester_id: s.semester_id,
     semester_name: s.semesters?.name ?? '—',
     round_name: s.semester_rounds?.name ?? null,

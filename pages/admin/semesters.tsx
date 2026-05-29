@@ -29,6 +29,8 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
   const [newRoundName, setNewRoundName] = useState('')
   const [newRoundDeadline, setNewRoundDeadline] = useState<Date | null>(null)
   const [savingRound, setSavingRound] = useState(false)
+  const [deletingRound, setDeletingRound] = useState<string | null>(null)
+  const [deleteRoundConfirm, setDeleteRoundConfirm] = useState<string | null>(null)
 
   const active = semesters.filter(s => s.is_active)
   const history = semesters.filter(s => !s.is_active)
@@ -135,6 +137,20 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
       setNewRoundDeadline(null)
     }
     setSavingRound(false)
+  }
+
+  const deleteRound = async (roundId: string) => {
+    setDeletingRound(roundId)
+    setDeleteRoundConfirm(null)
+    const res = await fetch('/api/rounds/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roundId }),
+    })
+    if (res.ok) {
+      setRounds(prev => prev.filter(r => r.id !== roundId))
+    }
+    setDeletingRound(null)
   }
 
   const toggleRound = async (r: SemesterRound) => {
@@ -283,12 +299,27 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
           ) : (
             <div className="space-y-2 mb-2">
               {semRounds.map(r => (
-                <div key={r.id} className="flex items-center justify-between gap-3">
+                <div key={r.id} className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-white text-sm">{r.name}</p>
                     <p className="text-slate-400 text-xs">
                       Due {new Date(r.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
+                    {deleteRoundConfirm === r.id && (
+                      <div className="mt-1.5">
+                        <p className="text-red-400 text-xs mb-1.5">Delete this round and all its submissions? This cannot be undone.</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => deleteRound(r.id)}
+                            disabled={deletingRound === r.id}
+                            className="btn-danger text-xs py-0.5 px-2"
+                          >
+                            {deletingRound === r.id ? 'Deleting…' : 'Yes, delete'}
+                          </button>
+                          <button onClick={() => setDeleteRoundConfirm(null)} className="btn-secondary text-xs py-0.5 px-2">Cancel</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${r.is_active ? 'bg-green-900 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
@@ -296,6 +327,13 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
                     </span>
                     <button onClick={() => toggleRound(r)} className="btn-secondary text-xs py-0.5 px-2">
                       {r.is_active ? 'Close' : 'Reopen'}
+                    </button>
+                    <button
+                      onClick={() => setDeleteRoundConfirm(prev => prev === r.id ? null : r.id)}
+                      className="text-xs text-slate-500 hover:text-red-400 transition-colors px-1"
+                      title="Delete round"
+                    >
+                      ✕
                     </button>
                   </div>
                 </div>

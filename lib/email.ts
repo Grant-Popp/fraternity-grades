@@ -30,7 +30,7 @@ const SUBJECTS: Record<EmailType, (s: string) => string> = {
   deadline_warning:  (s) => `⚠️ Grade Submission Due Soon — ${s}`,
   confirmation:      (s) => `✅ Grade Submission Received — ${s}`,
   approved:          (s) => `✅ Grade Submission Approved — ${s}`,
-  declined:          (s) => `❌ Grade Submission Declined — ${s}`,
+  declined:          (s) => `Action Required: Grade Submission — ${s}`,
   at_risk_summary:   (s) => `⚠️ At-Risk Members — ${s}`,
 }
 
@@ -68,11 +68,10 @@ function buildBody(opts: SendEmailOptions): string {
     `,
     declined: `
       <p>Hi ${memberName},</p>
-      <p>Your grade submission for <strong>${semesterName}</strong> has been <strong style="color:#dc2626;">declined</strong> by the VP of Academics & Scholarship.</p>
-      ${opts.declineReason ? `<p><strong>Reason:</strong> ${opts.declineReason}</p>` : ''}
-      <p>Please log back into the portal and resubmit a correct screenshot of your grades.</p>
+      <p>We were unable to verify your grade submission for <strong>${semesterName}</strong>. This may be due to an issue with the screenshot — please take a fresh one directly from your Blackboard grades page and resubmit.</p>
+      ${opts.declineReason ? `<p style="color:#64748b;font-size:14px;"><em>Note from VP of Academics: ${opts.declineReason}</em></p>` : ''}
+      <p>If you believe this is a mistake or are having trouble, reach out to your VP of Academics & Scholarship directly before the deadline.</p>
       ${btn}
-      <p>If you have questions, contact your VP of Academics & Scholarship directly.</p>
     `,
     at_risk_summary: `
       <p>Hi ${memberName},</p>

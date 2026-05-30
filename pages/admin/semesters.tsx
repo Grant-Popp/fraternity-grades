@@ -252,7 +252,7 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
                 onClick={() => setDeleteSemConfirm(s.id)}
                 className="text-xs text-slate-500 hover:text-red-400 transition-colors"
               >
-                🗑 Delete semester
+                ✕ Delete semester
               </button>
             )}
             {!s.is_active && (

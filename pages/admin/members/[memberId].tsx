@@ -161,10 +161,9 @@ export default function MemberDetailPage({ member: initialMember, submissions: i
   const strikes: number = member.strikes ?? 0
   const strikeColor = strikes === 0 ? 'text-green-400' : strikes === 1 ? 'text-yellow-400' : strikes === 2 ? 'text-orange-400' : 'text-red-400'
 
-  const reviewed = subs.filter(s => s.final_gpa != null)
-  const avgGpa = reviewed.length
-    ? reviewed.reduce((a, b) => a + (b.final_gpa ?? 0), 0) / reviewed.length
-    : null
+  // Most recent reviewed submission — subs are already sorted newest-first
+  const latestGpa = subs.find(s => s.final_gpa != null)?.final_gpa ?? null
+  const reviewedCount = subs.filter(s => s.final_gpa != null).length
 
   const saveNotes = async () => {
     setSavingNotes(true)
@@ -231,7 +230,7 @@ export default function MemberDetailPage({ member: initialMember, submissions: i
   return (
     <AdminLayout title={member.full_name}>
       <div className="mb-4">
-        <Link href="/admin/submissions" className="text-slate-400 hover:text-white text-sm">← Back to Submissions</Link>
+        <Link href="/admin/members" className="text-slate-400 hover:text-white text-sm">← Back to Members</Link>
       </div>
 
       {/* Profile card */}
@@ -244,17 +243,23 @@ export default function MemberDetailPage({ member: initialMember, submissions: i
               <span className="text-slate-300"><span className="text-slate-500">Year:</span> {member.class_year ?? '—'}</span>
               <span className="text-slate-300"><span className="text-slate-500">Major:</span> {member.major ?? '—'}</span>
               <span className={`font-medium px-2 py-0.5 rounded text-xs ${member.role === 'admin' ? 'bg-amber-900 text-amber-300' : 'bg-slate-700 text-slate-300'}`}>{member.role}</span>
-              <button onClick={toggleRole} disabled={savingRole} className="text-xs text-slate-400 hover:text-amber-400 transition-colors disabled:opacity-50">
-                {savingRole ? '…' : member.role === 'admin' ? 'Remove admin' : 'Make admin'}
-              </button>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-slate-400 text-xs mb-1">Overall GPA</p>
-            <p className={`text-3xl font-bold ${avgGpa != null ? gpaColorClass(avgGpa) : 'text-slate-500'}`}>
-              {avgGpa != null ? avgGpa.toFixed(2) : '—'}
-            </p>
-            <p className="text-slate-500 text-xs mt-0.5">{reviewed.length} graded submission{reviewed.length !== 1 ? 's' : ''}</p>
+          <div className="flex flex-col items-end gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-slate-400 text-xs mb-1">Latest GPA</p>
+              <p className={`text-3xl font-bold ${latestGpa != null ? gpaColorClass(latestGpa) : 'text-slate-500'}`}>
+                {latestGpa != null ? latestGpa.toFixed(2) : '—'}
+              </p>
+              <p className="text-slate-500 text-xs mt-0.5">{reviewedCount} reviewed submission{reviewedCount !== 1 ? 's' : ''}</p>
+            </div>
+            <button
+              onClick={toggleRole}
+              disabled={savingRole}
+              className="text-xs border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-amber-400 px-3 py-1.5 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              {savingRole ? '…' : member.role === 'admin' ? '🔑 Remove admin' : '🔑 Make admin'}
+            </button>
           </div>
         </div>
       </div>

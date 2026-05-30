@@ -38,7 +38,7 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-900/60 border-b border-slate-700">
-              {['Name','Email','Year','Major','Subs','Latest GPA','Strikes','Role',''].map(h => (
+              {['Name','Email','Year','Major','Submissions','Latest GPA','Strikes','Role',''].map(h => (
                 <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium">{h}</th>
               ))}
             </tr>
@@ -69,8 +69,8 @@ export default function MembersPage({ members: initial }: { members: MemberRow[]
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <Link href={`/admin/members/${m.id}`} className="text-xs text-amber-400 hover:text-amber-300">
-                    View
+                  <Link href={`/admin/members/${m.id}`} className="text-xs border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-amber-400 px-2.5 py-1 rounded transition-colors whitespace-nowrap">
+                    View →
                   </Link>
                 </td>
               </tr>

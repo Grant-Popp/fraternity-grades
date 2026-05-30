@@ -31,6 +31,8 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
   const [savingRound, setSavingRound] = useState(false)
   const [deletingRound, setDeletingRound] = useState<string | null>(null)
   const [deleteRoundConfirm, setDeleteRoundConfirm] = useState<string | null>(null)
+  const [deleteSemConfirm, setDeleteSemConfirm] = useState<string | null>(null)
+  const [deletingSem, setDeletingSem] = useState<string | null>(null)
 
   const active = semesters.filter(s => s.is_active)
   const history = semesters.filter(s => !s.is_active)
@@ -154,6 +156,20 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
     setDeletingRound(null)
   }
 
+  const deleteSemester = async (semesterId: string) => {
+    setDeletingSem(semesterId)
+    setDeleteSemConfirm(null)
+    const res = await fetch('/api/semesters/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ semesterId }),
+    })
+    if (res.ok) {
+      setSemesters(prev => prev.filter(s => s.id !== semesterId))
+    }
+    setDeletingSem(null)
+  }
+
   const toggleRound = async (r: SemesterRound) => {
     const res = await fetch('/api/rounds/update', {
       method: 'PATCH',
@@ -217,6 +233,28 @@ export default function SemestersPage({ semesters: initial, rounds: initialRound
             <button onClick={() => toggleActive(s)} className="btn-secondary text-xs py-1 px-3">
               {s.is_active ? 'Deactivate' : 'Activate'}
             </button>
+            {deleteSemConfirm === s.id ? (
+              <div className="flex flex-col gap-1.5 items-end">
+                <span className="text-xs text-red-400 text-right max-w-48">Permanently delete "{s.name}" and all its submissions? This cannot be undone.</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deleteSemester(s.id)}
+                    disabled={deletingSem === s.id}
+                    className="btn-danger text-xs py-1 px-2"
+                  >
+                    {deletingSem === s.id ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                  <button onClick={() => setDeleteSemConfirm(null)} className="btn-secondary text-xs py-1 px-2">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setDeleteSemConfirm(s.id)}
+                className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+              >
+                🗑 Delete semester
+              </button>
+            )}
             {!s.is_active && (
               archiveConfirm === s.id ? (
                 <div className="flex flex-col gap-1.5 items-end">

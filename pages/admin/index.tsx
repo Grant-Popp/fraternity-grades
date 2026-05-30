@@ -301,8 +301,19 @@ export const getServerSideProps: GetServerSideProps = async (ctx) => {
   const totalMembers = members?.length ?? 0
   const pendingReview = (submissions ?? []).filter(s => s.status === 'pending' && !s.no_grade).length
   const dropAlerts = dropAlertsData?.length ?? 0
-  const reviewed = (submissions ?? []).filter(s => s.final_gpa != null)
-  const chapterGpa = reviewed.length ? reviewed.reduce((a, b) => a + (b.final_gpa ?? 0), 0) / reviewed.length : null
+  // Per-member latest GPA — sort newest-first then take first hit per member so a
+  // member with multiple round submissions only counts once in the chapter average.
+  const memberLatestGpa = new Map<string, number>()
+  const sortedSubs = [...(submissions ?? [])].sort((a: any, b: any) =>
+    new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+  )
+  for (const sub of sortedSubs) {
+    if (sub.final_gpa != null && !memberLatestGpa.has(sub.member_id)) {
+      memberLatestGpa.set(sub.member_id, sub.final_gpa)
+    }
+  }
+  const reviewed = Array.from(memberLatestGpa.values())
+  const chapterGpa = reviewed.length ? reviewed.reduce((a, b) => a + b, 0) / reviewed.length : null
 
   const byYear: Record<string, { count: number; avg: number | null }> = {}
   for (const yr of ['Freshman','Sophomore','Junior','Senior']) {

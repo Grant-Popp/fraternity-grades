@@ -565,34 +565,32 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
             <div className="space-y-2 mb-4">
               {courseRows.map(row => (
                 <div key={row.key} className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px_28px] sm:gap-2 sm:items-center">
-                  <div className="flex gap-2 sm:contents">
+                  <input
+                    className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                    placeholder="ENGR 110"
+                    value={row.course_id}
+                    onChange={e => updateCourseRow(row.key, 'course_id', e.target.value)}
+                  />
+                  <input
+                    className="input !py-1.5 !text-sm"
+                    placeholder="Engineering Fundamentals"
+                    value={row.course_name}
+                    onChange={e => updateCourseRow(row.key, 'course_name', e.target.value)}
+                  />
+                  <div className="flex gap-2 items-center sm:contents">
                     <input
-                      className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
-                      placeholder="ENGR 110"
-                      value={row.course_id}
-                      onChange={e => updateCourseRow(row.key, 'course_id', e.target.value)}
-                    />
-                    <input
-                      className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
-                      placeholder="3"
+                      className="input !py-1.5 !text-sm w-20 sm:w-auto text-center"
+                      placeholder="Cr"
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       value={row.credits}
                       onChange={e => updateCourseRow(row.key, 'credits', e.target.value)}
                     />
-                  </div>
-                  <div className="flex gap-2 items-center sm:contents">
-                    <input
-                      className="input !py-1.5 !text-sm flex-1 min-w-0 sm:order-2"
-                      placeholder="Engineering Fundamentals"
-                      value={row.course_name}
-                      onChange={e => updateCourseRow(row.key, 'course_name', e.target.value)}
-                    />
                     <button
                       onClick={() => removeCourseRow(row.key)}
                       disabled={courseRows.length === 1}
-                      className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 w-7 sm:order-4"
+                      className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 ml-auto sm:ml-0 w-7"
                     >×</button>
                   </div>
                 </div>
@@ -629,28 +627,26 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                   return (
                     <div key={c.id} className="border border-amber-500/40 bg-slate-800/60 rounded-lg px-3 py-3">
                       <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px] sm:gap-2 mb-2">
-                        <div className="flex gap-2 sm:contents">
-                          <input
-                            className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
-                            placeholder="ENGR 110"
-                            value={editValues.course_id}
-                            onChange={e => setEditValues(v => ({ ...v, course_id: e.target.value }))}
-                          />
-                          <input
-                            className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
-                            placeholder="3"
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={editValues.credits}
-                            onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
-                          />
-                        </div>
                         <input
-                          className="input !py-1.5 !text-sm sm:order-2"
+                          className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                          placeholder="ENGR 110"
+                          value={editValues.course_id}
+                          onChange={e => setEditValues(v => ({ ...v, course_id: e.target.value }))}
+                        />
+                        <input
+                          className="input !py-1.5 !text-sm"
                           placeholder="Course Name"
                           value={editValues.course_name}
                           onChange={e => setEditValues(v => ({ ...v, course_name: e.target.value }))}
+                        />
+                        <input
+                          className="input !py-1.5 !text-sm w-20 sm:w-auto text-center"
+                          placeholder="Cr"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={editValues.credits}
+                          onChange={e => setEditValues(v => ({ ...v, credits: e.target.value }))}
                         />
                       </div>
                       {editError && <p className="text-red-400 text-xs mb-2">{editError}</p>}
@@ -729,34 +725,32 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
                 <div className="space-y-2 mb-2">
                   {newCourseRows.map(row => (
                     <div key={row.key} className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[1fr_2fr_60px_28px] sm:gap-2 sm:items-center">
-                      <div className="flex gap-2 sm:contents">
+                      <input
+                        className="input !py-1.5 !text-sm uppercase placeholder:normal-case"
+                        placeholder="ENGR 110"
+                        value={row.course_id}
+                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_id: e.target.value } : r))}
+                      />
+                      <input
+                        className="input !py-1.5 !text-sm"
+                        placeholder="Course Name"
+                        value={row.course_name}
+                        onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_name: e.target.value } : r))}
+                      />
+                      <div className="flex gap-2 items-center sm:contents">
                         <input
-                          className="input !py-1.5 !text-sm flex-1 min-w-0 uppercase placeholder:normal-case sm:order-1"
-                          placeholder="ENGR 110"
-                          value={row.course_id}
-                          onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_id: e.target.value } : r))}
-                        />
-                        <input
-                          className="input !py-1.5 !text-sm !w-14 text-center sm:!w-auto sm:order-3"
-                          placeholder="3"
+                          className="input !py-1.5 !text-sm w-20 sm:w-auto text-center"
+                          placeholder="Cr"
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
                           value={row.credits}
                           onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, credits: e.target.value } : r))}
                         />
-                      </div>
-                      <div className="flex gap-2 items-center sm:contents">
-                        <input
-                          className="input !py-1.5 !text-sm flex-1 min-w-0 sm:order-2"
-                          placeholder="Course Name"
-                          value={row.course_name}
-                          onChange={e => setNewCourseRows(prev => prev.map(r => r.key === row.key ? { ...r, course_name: e.target.value } : r))}
-                        />
                         <button
                           onClick={() => setNewCourseRows(prev => prev.length > 1 ? prev.filter(r => r.key !== row.key) : prev)}
                           disabled={newCourseRows.length === 1}
-                          className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 w-7 sm:order-4"
+                          className="text-slate-500 hover:text-red-400 text-xl leading-none disabled:opacity-30 shrink-0 ml-auto sm:ml-0 w-7"
                         >×</button>
                       </div>
                     </div>

@@ -367,6 +367,11 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                       <Link href={`/admin/members/${s.member_id}`} className="text-white hover:text-amber-400 transition-colors">
                         {s.member_name}
                       </Link>
+                      {s.course_grades && Object.keys(s.course_grades).length > 0 && (
+                        <span className="ml-1.5 text-xs text-slate-500" title="Has per-course grades — click name to review">
+                          {Object.keys(s.course_grades).length} courses
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-300">{s.member_class_year}</td>
                     <td className="px-4 py-3 text-slate-300">{s.semester_name}</td>

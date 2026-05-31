@@ -35,6 +35,7 @@ export type Submission = {
   admin_notes: string | null
   decline_reason: string | null
   course_grades: Record<string, string> | null
+  course_photos: Record<string, string> | null
   round_id: string | null
   submitted_at: string
   reviewed_at: string | null

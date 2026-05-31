@@ -199,6 +199,27 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
   const [bulkApproving, setBulkApproving] = useState(false)
   const [bulkResult, setBulkResult] = useState<string | null>(null)
   const [expandedOcr, setExpandedOcr] = useState<Set<string>>(new Set())
+  const [coursePhotoUrls, setCoursePhotoUrls] = useState<Record<string, Record<string, string>>>({})
+  const [loadingCoursePhoto, setLoadingCoursePhoto] = useState<string | null>(null)
+
+  const handleViewCoursePhoto = async (subId: string, courseId: string) => {
+    const key = `${subId}:${courseId}`
+    if (coursePhotoUrls[subId]?.[courseId] !== undefined) {
+      setCoursePhotoUrls(prev => {
+        const copy = { ...prev, [subId]: { ...prev[subId] } }
+        delete copy[subId][courseId]
+        return copy
+      })
+      return
+    }
+    setLoadingCoursePhoto(key)
+    const res = await fetch(`/api/submissions/photo-url?submissionId=${subId}&courseId=${encodeURIComponent(courseId)}`)
+    if (res.ok) {
+      const { url } = await res.json()
+      setCoursePhotoUrls(prev => ({ ...prev, [subId]: { ...(prev[subId] ?? {}), [courseId]: url } }))
+    }
+    setLoadingCoursePhoto(null)
+  }
 
   const acknowledgeAlert = async (alertId: string) => {
     await fetch('/api/drops/acknowledge', {
@@ -437,27 +458,63 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
 
                           {/* Detail panel */}
                           <div className="flex-1 min-w-0 space-y-3">
-                            {/* Course grades table */}
+                            {/* Course grades table with per-course photo viewer */}
                             {s.course_grades && Object.keys(s.course_grades).length > 0 && (
                               <div>
                                 <p className="text-slate-400 text-xs font-medium mb-2">Submitted course grades</p>
                                 <div className="rounded-lg border border-slate-700 overflow-hidden">
                                   <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-slate-900/40 border-b border-slate-700">
+                                        <th className="px-3 py-1.5 text-left text-slate-500 font-medium">Course</th>
+                                        <th className="px-3 py-1.5 text-left text-slate-500 font-medium">Grade</th>
+                                        <th className="px-3 py-1.5 text-left text-slate-500 font-medium">Pts</th>
+                                        <th className="px-3 py-1.5 text-left text-slate-500 font-medium">Photo</th>
+                                      </tr>
+                                    </thead>
                                     <tbody>
                                       {Object.entries(s.course_grades).map(([course, grade]) => {
                                         const gpa = gradeToGpa(grade)
+                                        const hasPhoto = !!(s.course_photos as Record<string, string> | null)?.[course]
+                                        const photoUrl = coursePhotoUrls[s.id]?.[course]
+                                        const isLoading = loadingCoursePhoto === `${s.id}:${course}`
                                         return (
-                                          <tr key={course} className="border-b border-slate-800 last:border-0">
-                                            <td className="px-3 py-2 text-slate-300 font-mono">{course}</td>
-                                            <td className="px-3 py-2">
-                                              <span className={`font-semibold ${gpa != null ? gpaColorClass(gpa) : grade === 'N/A' ? 'text-slate-500' : 'text-white'}`}>
-                                                {grade}
-                                              </span>
-                                            </td>
-                                            <td className="px-3 py-2 text-slate-500">
-                                              {gpa != null ? `${gpa.toFixed(1)} pts` : ''}
-                                            </td>
-                                          </tr>
+                                          <>
+                                            <tr key={course} className="border-b border-slate-800 last:border-0">
+                                              <td className="px-3 py-2 text-slate-300 font-mono">{course}</td>
+                                              <td className="px-3 py-2">
+                                                {grade === '' ? (
+                                                  <span className="text-amber-400 font-medium">Needs review</span>
+                                                ) : grade === 'N/A' ? (
+                                                  <span className="text-slate-500">No grade yet</span>
+                                                ) : (
+                                                  <span className={`font-semibold ${gpa != null ? gpaColorClass(gpa) : 'text-white'}`}>{grade}</span>
+                                                )}
+                                              </td>
+                                              <td className="px-3 py-2 text-slate-500">{gpa != null ? `${gpa.toFixed(1)}` : ''}</td>
+                                              <td className="px-3 py-2">
+                                                {hasPhoto ? (
+                                                  <button
+                                                    onClick={() => handleViewCoursePhoto(s.id, course)}
+                                                    className="text-xs text-amber-400 hover:text-amber-300 whitespace-nowrap"
+                                                  >
+                                                    {isLoading ? '…' : photoUrl !== undefined ? 'Hide ↑' : 'View ↓'}
+                                                  </button>
+                                                ) : <span className="text-slate-600 text-xs">—</span>}
+                                              </td>
+                                            </tr>
+                                            {photoUrl && (
+                                              <tr key={`${course}-photo`} className="border-b border-slate-800 bg-slate-900/40">
+                                                <td colSpan={4} className="px-3 py-3">
+                                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                  <img src={photoUrl} alt={`${course} screenshot`}
+                                                    className="max-h-72 rounded border border-slate-600 object-contain cursor-pointer"
+                                                    onClick={() => window.open(photoUrl, '_blank')} />
+                                                  <a href={photoUrl} target="_blank" rel="noreferrer" className="text-xs text-slate-500 hover:text-amber-400 mt-1 block">Open full size ↗</a>
+                                                </td>
+                                              </tr>
+                                            )}
+                                          </>
                                         )
                                       })}
                                     </tbody>

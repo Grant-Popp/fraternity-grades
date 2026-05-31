@@ -312,23 +312,28 @@ export default function SubmitPage({ semester, alreadySubmitted, isFinalized, ac
 
     const courseGrades: Record<string, string> = {}
     const allRawTexts: string[] = []
-    let firstFile: File | null = null
+    const photoEntries: Array<{ courseId: string; file: File }> = []
 
     for (const c of activeCourses) {
       const p = perCoursePics[c.course_id]
       if (p?.noGrade) {
         courseGrades[c.course_id] = 'N/A'
       } else if (p?.file) {
-        if (!firstFile) firstFile = p.file
-        if (p.grade) courseGrades[c.course_id] = p.grade
+        photoEntries.push({ courseId: c.course_id, file: p.file })
+        // Always record every course — empty string means photo submitted but grade not detected
+        courseGrades[c.course_id] = p.grade || ''
         if (p.rawText) allRawTexts.push(p.rawText)
       }
     }
 
-    if (!firstFile) { setError('Please upload at least one photo.'); submitLockRef.current = false; setSubmitting(false); return }
+    if (photoEntries.length === 0) { setError('Please upload at least one photo.'); submitLockRef.current = false; setSubmitting(false); return }
 
     const formData = new FormData()
-    formData.append('file', firstFile)
+    // Send every course photo with indexed keys + course ID map for backend
+    photoEntries.forEach(({ courseId, file }, idx) => formData.append(`file_${idx}`, file))
+    formData.append('photoCourseIds', JSON.stringify(photoEntries.map(e => e.courseId)))
+    // Legacy 'file' field for backward compat with existing anti-cheat logic
+    formData.append('file', photoEntries[0].file)
     formData.append('semesterId', semester.id)
     formData.append('ocrRawText', allRawTexts.join('\n').substring(0, 5000))
     formData.append('courseGrades', JSON.stringify(courseGrades))

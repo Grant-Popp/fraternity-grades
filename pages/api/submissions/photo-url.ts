@@ -11,18 +11,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', user.id).maybeSingle()
   if (profile?.role !== 'admin') return res.status(403).json({ error: 'Forbidden' })
 
-  const { submissionId } = req.query
+  const { submissionId, courseId } = req.query
   if (!submissionId || typeof submissionId !== 'string') {
     return res.status(400).json({ error: 'submissionId required' })
   }
 
   const { data: sub } = await supabaseAdmin
-    .from('submissions').select('photo_url').eq('id', submissionId).maybeSingle()
-  if (!sub?.photo_url) return res.status(404).json({ error: 'No photo for this submission' })
+    .from('submissions').select('photo_url, course_photos').eq('id', submissionId).maybeSingle()
 
+  // Per-course photo lookup
+  if (courseId && typeof courseId === 'string') {
+    const photoPath = (sub?.course_photos as Record<string, string> | null)?.[courseId]
+    if (!photoPath) return res.status(404).json({ error: 'No photo for this course' })
+    const { data } = await supabaseAdmin.storage.from('grade-photos').createSignedUrl(photoPath, 3600)
+    if (!data?.signedUrl) return res.status(500).json({ error: 'Could not generate photo URL' })
+    return res.status(200).json({ url: data.signedUrl })
+  }
+
+  if (!sub?.photo_url) return res.status(404).json({ error: 'No photo for this submission' })
   const { data } = await supabaseAdmin.storage
     .from('grade-photos').createSignedUrl(sub.photo_url, 3600)
   if (!data?.signedUrl) return res.status(500).json({ error: 'Could not generate photo URL' })
-
   return res.status(200).json({ url: data.signedUrl })
 }

@@ -112,6 +112,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const directGpaRaw = Array.isArray(fields.directGpa) ? fields.directGpa[0] : fields.directGpa ?? ''
   const imageFile = Array.isArray(files.file) ? files.file[0] : files.file
 
+  // Multi-course photo map: photoCourseIds[i] matches file_i
+  const photoCourseIdsRaw = Array.isArray(fields.photoCourseIds) ? fields.photoCourseIds[0] : fields.photoCourseIds ?? '[]'
+  let photoCourseIds: string[] = []
+  try {
+    const parsed = JSON.parse(photoCourseIdsRaw)
+    if (Array.isArray(parsed)) photoCourseIds = (parsed as unknown[]).filter(x => typeof x === 'string').slice(0, 20) as string[]
+  } catch {}
+
   let courseGradesData: Record<string, string> = {}
   if (courseGradesRaw && courseGradesRaw !== '{}') {
     try {
@@ -242,6 +250,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .upload(storagePath, fileBuffer, { contentType: imageFile.mimetype ?? 'image/jpeg', upsert: true })
 
   if (uploadError) return res.status(500).json({ error: 'Photo upload failed' })
+
+  // Upload remaining per-course photos and build course_photos map
+  const coursePhotosMap: Record<string, string> = {}
+  if (photoCourseIds[0]) coursePhotosMap[photoCourseIds[0]] = storagePath
+  for (let idx = 1; idx < photoCourseIds.length; idx++) {
+    const courseId = photoCourseIds[idx]
+    const fileKey = `file_${idx}`
+    const cf = Array.isArray((files as any)[fileKey]) ? (files as any)[fileKey][0] : (files as any)[fileKey]
+    if (!cf) continue
+    try {
+      const cfBuf = fs.readFileSync(cf.filepath)
+      const cfExt = cf.originalFilename?.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const cfSlug = courseId.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+      const cfPath = `${user.id}/${pathSuffix}_${cfSlug}.${cfExt}`
+      const { error: cfErr } = await supabaseAdmin.storage
+        .from('grade-photos').upload(cfPath, cfBuf, { contentType: cf.mimetype ?? 'image/jpeg', upsert: true })
+      if (!cfErr) coursePhotosMap[courseId] = cfPath
+    } catch {}
+  }
 
   // ── Anti-cheat 2: Perceptual hash ────────────────────────────
   // Catches identical or near-identical images reused across ANY past submission
@@ -389,6 +416,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     photo_phash,
     duplicate_flag,
     course_grades: Object.keys(courseGradesData).length > 0 ? courseGradesData : null,
+    course_photos: Object.keys(coursePhotosMap).length > 0 ? coursePhotosMap : null,
   })
 
   // Clean up orphaned storage file if insert failed

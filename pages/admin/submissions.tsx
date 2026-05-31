@@ -145,13 +145,17 @@ function GpaEditor({
         <>
           {sub.status === 'pending' && !sub.no_grade && (
             <>
-              <button
-                onClick={approve}
-                disabled={saving}
-                className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors"
-              >
-                {saving ? '…' : '✓ Approve'}
-              </button>
+              {sub.ocr_gpa != null ? (
+                <button onClick={approve} disabled={saving}
+                  className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors">
+                  {saving ? '…' : '✓ Approve'}
+                </button>
+              ) : (
+                <button onClick={() => setEditing(true)}
+                  className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition-colors">
+                  ✓ Approve — set GPA
+                </button>
+              )}
               <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
               <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
             </>
@@ -161,7 +165,12 @@ function GpaEditor({
           )}
           {sub.status === 'reviewed' && (
             <>
-              <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">Edit</button>
+              {sub.final_gpa == null && (
+                <span className="text-xs text-amber-400 mr-1">No GPA —</span>
+              )}
+              <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-amber-400">
+                {sub.final_gpa == null ? 'Set GPA' : 'Edit'}
+              </button>
               <button onClick={() => setDeclining(true)} className="text-xs text-red-500 hover:text-red-400">✗ Decline</button>
             </>
           )}
@@ -189,6 +198,7 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
   const [loadingPhoto, setLoadingPhoto] = useState<string | null>(null)
   const [bulkApproving, setBulkApproving] = useState(false)
   const [bulkResult, setBulkResult] = useState<string | null>(null)
+  const [expandedOcr, setExpandedOcr] = useState<Set<string>>(new Set())
 
   const acknowledgeAlert = async (alertId: string) => {
     await fetch('/api/drops/acknowledge', {
@@ -407,10 +417,11 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                     <tr key={`${s.id}-expand`} className="bg-slate-950/60 border-b border-slate-700">
                       <td colSpan={9} className="px-4 py-5">
                         <div className="flex gap-6 flex-wrap">
+                          {/* Photo */}
                           <div className="shrink-0">
                             {signedUrls[s.id] ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={signedUrls[s.id]} alt="Grade screenshot" className="max-h-96 max-w-sm rounded border border-slate-600 object-contain cursor-pointer"
+                              <img src={signedUrls[s.id]} alt="Grade screenshot" className="max-h-96 max-w-xs rounded border border-slate-600 object-contain cursor-pointer"
                                 onClick={() => window.open(signedUrls[s.id], '_blank')} title="Click to open full size" />
                             ) : (
                               <div className="flex items-center justify-center w-48 h-36 bg-slate-800 rounded border border-slate-600 text-slate-400 text-sm">
@@ -423,34 +434,45 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                               </a>
                             )}
                           </div>
+
+                          {/* Detail panel */}
                           <div className="flex-1 min-w-0 space-y-3">
+                            {/* Course grades table */}
                             {s.course_grades && Object.keys(s.course_grades).length > 0 && (
                               <div>
-                                <p className="text-slate-400 text-xs mb-2 font-medium">OCR-detected course grades:</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {Object.entries(s.course_grades).map(([course, grade]) => {
-                                    const gpa = gradeToGpa(grade)
-                                    return (
-                                      <span key={course} className="text-xs bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-full">
-                                        <span className="text-slate-400">{course}</span>
-                                        {' '}
-                                        <span className={`font-semibold ${gpa != null ? gpaColorClass(gpa) : 'text-white'}`}>{grade}</span>
-                                      </span>
-                                    )
-                                  })}
+                                <p className="text-slate-400 text-xs font-medium mb-2">Submitted course grades</p>
+                                <div className="rounded-lg border border-slate-700 overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {Object.entries(s.course_grades).map(([course, grade]) => {
+                                        const gpa = gradeToGpa(grade)
+                                        return (
+                                          <tr key={course} className="border-b border-slate-800 last:border-0">
+                                            <td className="px-3 py-2 text-slate-300 font-mono">{course}</td>
+                                            <td className="px-3 py-2">
+                                              <span className={`font-semibold ${gpa != null ? gpaColorClass(gpa) : grade === 'N/A' ? 'text-slate-500' : 'text-white'}`}>
+                                                {grade}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-2 text-slate-500">
+                                              {gpa != null ? `${gpa.toFixed(1)} pts` : ''}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
                                 </div>
                               </div>
                             )}
-                            <div>
-                              <p className="text-slate-400 text-xs mb-1 font-medium">Raw OCR text:</p>
-                              <pre className="text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-32 whitespace-pre-wrap">{s.ocr_raw_text || '(none)'}</pre>
-                            </div>
+
+                            {/* Flag warning */}
                             {s.duplicate_flag && (
                               <div className="bg-amber-950/40 border border-amber-700/40 rounded-lg px-3 py-3">
-                                <p className="text-amber-400 text-sm font-semibold mb-2">⚠ Flagged for manual review</p>
+                                <p className="text-amber-400 text-sm font-semibold mb-1">⚠ Flagged for manual review</p>
                                 {s.duplicate_matches && s.duplicate_matches.length > 0 ? (
                                   <div className="mb-2">
-                                    <p className="text-amber-300 text-xs font-medium mb-1">Near-identical photo also found in:</p>
+                                    <p className="text-amber-300 text-xs font-medium mb-1">Near-identical photo found in:</p>
                                     <ul className="space-y-0.5">
                                       {s.duplicate_matches.map(m => (
                                         <li key={m.id} className="text-xs text-amber-200">
@@ -458,21 +480,44 @@ export default function SubmissionsPage({ submissions: initialSubs, semesters, d
                                           <Link href={`/admin/members/${m.memberId}`} className="font-medium underline hover:text-amber-400 transition-colors">
                                             {m.memberName}
                                           </Link>
-                                          {' '}— {m.semesterName} (submitted {new Date(m.submittedAt).toLocaleDateString()})
+                                          {' '}— {m.semesterName} ({new Date(m.submittedAt).toLocaleDateString()})
                                         </li>
                                       ))}
                                     </ul>
                                   </div>
                                 ) : null}
-                                <p className="text-slate-400 text-xs">Other possible triggers: photo editing software detected in EXIF, member's name not found in screenshot, or page does not appear to be from a grade portal.</p>
+                                <p className="text-slate-500 text-xs mt-1">Possible triggers: editing software in EXIF, name not in screenshot, too little OCR text, or not a grade portal page.</p>
                               </div>
                             )}
+
+                            {/* Admin notes */}
                             {s.admin_notes && (
                               <p className="text-amber-300 text-sm bg-amber-900/20 px-3 py-2 rounded">Note: {s.admin_notes}</p>
                             )}
+
+                            {/* Reviewed timestamp */}
                             {s.reviewed_at && (
                               <p className="text-slate-600 text-xs">Reviewed {new Date(s.reviewed_at).toLocaleString()}</p>
                             )}
+
+                            {/* OCR text — collapsed by default */}
+                            <div>
+                              <button
+                                onClick={() => setExpandedOcr(prev => {
+                                  const next = new Set(prev)
+                                  next.has(s.id) ? next.delete(s.id) : next.add(s.id)
+                                  return next
+                                })}
+                                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                              >
+                                {expandedOcr.has(s.id) ? '▲ Hide raw OCR' : '▼ Show raw OCR text'}
+                              </button>
+                              {expandedOcr.has(s.id) && (
+                                <pre className="mt-1.5 text-xs text-slate-300 bg-slate-900 rounded p-3 overflow-auto max-h-32 whitespace-pre-wrap">
+                                  {s.ocr_raw_text || '(none)'}
+                                </pre>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>

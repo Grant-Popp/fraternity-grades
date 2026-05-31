@@ -364,9 +364,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // ── Anti-cheat 8: Minimum OCR text length ───────────────────
-  // A real grade page should produce at least 40 characters of OCR text.
-  // Very short OCR suggests a blank screenshot or a mocked submission.
-  if (!duplicate_flag && ocrRawText.trim().length < 40) duplicate_flag = true
+  // Flag if OCR returned something but it's suspiciously short (suggests a fake/minimal response).
+  // Empty OCR (length === 0) is NOT flagged — OCR legitimately fails on some screenshots.
+  if (!duplicate_flag && ocrRawText.length > 0 && ocrRawText.trim().length < 40) duplicate_flag = true
 
   // ── Anti-cheat 9: Digit presence check ──────────────────────
   // Real grade pages contain numbers (credit hours, GPAs, course codes).

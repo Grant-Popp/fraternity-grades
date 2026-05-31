@@ -54,12 +54,22 @@ async function preprocessImage(file: File): Promise<HTMLCanvasElement> {
       // Manual grayscale + contrast stretch (more consistent than CSS filters)
       const id = ctx.getImageData(0, 0, w, h)
       const d = id.data
+      let totalLum = 0
       for (let i = 0; i < d.length; i += 4) {
         // Weighted luminance (ITU-R BT.601)
         const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
         // Contrast stretch — pushes mid-grays toward black/white for sharper text
         const c = Math.min(255, Math.max(0, (gray - 128) * 1.8 + 128))
         d[i] = d[i + 1] = d[i + 2] = c
+        totalLum += c
+      }
+      // Dark-mode inversion: Blackboard and similar apps use white text on dark background.
+      // Tesseract reads black-on-white, so invert any screenshot where the average pixel is dark.
+      const avgLum = totalLum / (d.length / 4)
+      if (avgLum < 110) {
+        for (let i = 0; i < d.length; i += 4) {
+          d[i] = d[i + 1] = d[i + 2] = 255 - d[i]
+        }
       }
       ctx.putImageData(id, 0, 0)
 
